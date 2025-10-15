@@ -35,9 +35,7 @@ module prf #(
     parameter TAG_WIDTH    = 5
 )(
     // Module I/O
-    input logic clk,
-    input logic rst,
-    input logic flush,
+    input logic clk, rst, flush, cache_stall,
 
     //-------------------------------------------------------------
     // RENAME STAGE PORTS (4 READ, 2 TAG WRITE)
@@ -91,7 +89,7 @@ module prf #(
             for (int i = 0; i < ARCH_REGS; i++) begin
                 renamed_reg[i] <= 1'b0;
             end
-        end else begin
+        end else if (~cache_stall) begin
             // --- Commit Stage Writes ---
             if (commit_0_write_port.we && commit_0_write_port.addr != 0) begin
                 data_reg[commit_0_write_port.addr] <= commit_0_write_port.data;
