@@ -40,4 +40,4 @@ The processor implements the following 8-stage pipeline:
 
 ***
 
-![Core Block Diagram](./docs/imgs/block_diagram.png)
+![Core Block Diagram](./docs/block_diagram.png)
