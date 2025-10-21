@@ -1,39 +1,6 @@
-/*
- * Physical Register File (PRF) with Integrated Renaming Logic
- *
- * This module implements a Physical Register File (PRF) based renaming scheme
- * for a dual-issue, out-of-order RISC-V processor. It serves as the central
- * storage for both speculative and committed register states.
- */
+import uarch_pkg::*;
 
-// BEST PRACTICE: These type definitions should be in a shared package
-// (e.g., definitions_pkg.sv) and imported where needed.
-// `import definitions_pkg::*;`
-typedef struct packed {
-    logic [DATA_WIDTH-1:0] data;
-    logic [TAG_WIDTH-1:0]  tag;
-    logic                  renamed;
-} read_port_t;
-
-typedef struct packed {
-    logic [$clog2(ARCH_REGS)-1:0] addr;
-    logic [TAG_WIDTH-1:0]         tag;
-    logic                         we;
-} rat_write_port_t;
-
-typedef struct packed {
-    logic [$clog2(ARCH_REGS)-1:0] addr;
-    logic [DATA_WIDTH-1:0]        data;
-    logic [TAG_WIDTH-1:0]         tag; // Tag is crucial for correct commit
-    logic                         we;
-} commit_write_port_t;
-
-
-module prf #(
-    parameter ARCH_REGS    = 32,
-    parameter DATA_WIDTH   = 32,
-    parameter TAG_WIDTH    = 5
-)(
+module prf (
     // Module I/O
     input logic clk, rst, flush, cache_stall,
 
@@ -41,28 +8,26 @@ module prf #(
     // RENAME STAGE PORTS (4 READ, 2 TAG WRITE)
     //-------------------------------------------------------------
     // Read Ports for Instruction 0
-    input  logic [$clog2(ARCH_REGS)-1:0]    rs1_0, rs2_0,
-    output read_port_t                      rs1_0_read_port, rs2_0_read_port,
+    input  logic [$clog2(ARCH_REGS)-1:0]    rs1_0,              rs2_0,
+    output prf_read_port_t                  rs1_0_read_port,    rs2_0_read_port,
 
     // Read Ports for Instruction 1
-    input  logic [$clog2(ARCH_REGS)-1:0]    rs1_1, rs2_1,
-    output read_port_t                      rs1_1_read_port, rs2_1_read_port,
+    input  logic [$clog2(ARCH_REGS)-1:0]    rs1_1,              rs2_1,
+    output prf_read_port_t                  rs1_1_read_port,    rs2_1_read_port,
 
     // Tag Write Ports
-    input  rat_write_port_t                 rat_0_write_port,
-    input  rat_write_port_t                 rat_1_write_port,
+    input  prf_rat_write_port_t             rat_0_write_port,   rat_1_write_port,
 
     //-------------------------------------------------------------
     // COMMIT STAGE PORTS (2 DATA WRITE)
     //-------------------------------------------------------------
-    input  commit_write_port_t              commit_0_write_port,
-    input  commit_write_port_t              commit_1_write_port
+    input  prf_commit_write_port_t          commit_0_write_port, commit_1_write_port
 );
 
     // Internal storage for the PRF
-    logic [DATA_WIDTH-1:0] data_reg [ARCH_REGS-1:0];
-    logic [TAG_WIDTH-1:0]  tag_reg [ARCH_REGS-1:0];
-    logic                  renamed_reg [ARCH_REGS-1:0];
+    logic [CPU_DATA_BITS-1:0]   data_reg    [ARCH_REGS-1:0];
+    logic [TAG_WIDTH-1:0]       tag_reg     [ARCH_REGS-1:0];
+    logic                       renamed_reg [ARCH_REGS-1:0];
 
     //-------------------------------------------------------------
     // READ LOGIC (Asynchronous)
