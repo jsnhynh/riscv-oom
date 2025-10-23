@@ -42,15 +42,12 @@ module prf (
     //-------------------------------------------------------------
     always_ff @(posedge clk) begin
         if (rst) begin
-            // Reset all registers to a known, non-renamed state
             for (int i = 0; i < ARCH_REGS; i++) begin
                 data_reg[i]    <= '0;
                 renamed_reg[i] <= '0;
                 tag_reg[i]     <= '0;
             end
         end else if (flush) begin
-            // On a global flush, clear all speculative rename flags
-            // CORRECTED: Loop condition is now i < ARCH_REGS
             for (int i = 0; i < ARCH_REGS; i++) begin
                 renamed_reg[i] <= 1'b0;
             end

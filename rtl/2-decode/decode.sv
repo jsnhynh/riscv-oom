@@ -116,12 +116,11 @@ module decode (
         if (rst || flush) begin
             decode_inst0 <= '{default:'0};
             decode_inst1 <= '{default:'0};
-        end else if (decode_rdy) begin // Only update if the stage is not stalled
+        end else if (decode_rdy) begin
             if (inst_val) begin
                 decode_inst0 <= decode_inst0_next;
                 decode_inst1 <= decode_inst1_next;
             end else begin
-                // Insert a bubble if input is not valid but we are not stalled
                 decode_inst0 <= '{default:'0};
                 decode_inst1 <= '{default:'0};
             end

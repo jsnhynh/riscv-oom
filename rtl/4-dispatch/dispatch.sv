@@ -18,9 +18,9 @@ module dispatch (
     output logic dispatch_rdy,
 
     // Ready from RS
-    input  logic alu_rs_rdy,
-    input  logic mdu_rs_rdy,
-    input  logic lsq_rdy,
+    input  logic [1:0] alu_rs_rdy, // 00: 0 rdy, 01: 1 rdy, 10/11: 2+ rdy
+    input  logic [1:0] mdu_rs_rdy,
+    input  logic [1:0] lsq_rdy,
     input  logic [1:0] rob_rdy,
 
     // Write Ports to RS
@@ -52,6 +52,21 @@ module dispatch (
     assign is_lsq1 = renamed_inst1.is_valid && renamed_inst1.is_load || renamed_inst1.is_store;
 
     // -- Step 2: Determine if inst 0 can be dispatched -- 
+    assign can_dispatch0 =  (is_alu0 && alu_rs_rdy[0]) || 
+                            (is_mdu0 && mdu_rs_rdy[0]) || 
+                            (is_lsq0 && lsq_rdy[0]);
+
+
+    // CASES
+    // Both ALU
+    always_comb begin
+        casez ({})
+            : 
+            default: 
+        endcase
+    end
+
+    
 
     // -- Step 3: Determine if inst 1 can be dispatched --
 
