@@ -96,7 +96,7 @@ module decode (
     //-------------------------------------------------------------
     // Handshake and Pipeline Control
     //-------------------------------------------------------------
-    assign decode_rdy = rename_rdy && !cache_stall;
+    assign decode_rdy = rename_rdy && ~cache_stall;
     assign decode_val = inst_val && decode_rdy;
 
 
