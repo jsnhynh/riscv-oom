@@ -1,6 +1,6 @@
 module inst_buffer (
   // Module I/O
-  input logic clk, rst, flush, cache_stall,
+  input logic clk, rst, flush,
 
   // Port from ICache
   input  logic [CPU_ADDR_BITS-1:0]    pc,
@@ -10,8 +10,8 @@ module inst_buffer (
 
   // Port to Decoder
   input  logic decoder_rdy,
-  output logic [CPU_ADDR_BITS-1:0]  pc, pc_4,
-  output logic [CPU_INST_BITS-1:0]  inst0, inst1,
+  output logic [CPU_ADDR_BITS-1:0]  inst0_pc, inst1_pc,
+  output logic [CPU_INST_BITS-1:0]  inst0,    inst1,
   output logic                      inst_val
 );
   logic [$clog2(INST_BUFFER_DEPTH)-1:0] read_ptr, write_ptr;
@@ -27,7 +27,7 @@ module inst_buffer (
     if (rst || flush) begin
       read_ptr  <= 'd0;
       write_ptr <= 'd0;
-    end else if (~cache_stall) begin
+    end else begin
       if (do_write) begin // Write
         inst_packet_reg[write_ptr]  <= icache_dout;
         pc_regs[write_ptr]          <= pc;
@@ -48,8 +48,8 @@ module inst_buffer (
 
   // Read
   logic [2*CPU_INST_BITS-1:0] read_packet = inst_packet_reg[read_ptr];
-  assign inst0  = read_packet[CPU_INST_BITS-1:0];
-  assign inst1  = read_packet[2*CPU_INST_BITS-1:CPU_INST_BITS];
-  assign pc     = pc_regs[read_ptr];
-  assign pc_4   = pc_regs[read_ptr] + 4;
+  assign inst0    = read_packet[CPU_INST_BITS-1:0];
+  assign inst1    = read_packet[2*CPU_INST_BITS-1:CPU_INST_BITS];
+  assign inst0_pc = pc_regs[read_ptr];
+  assign inst1_pc   = pc_regs[read_ptr] + 4;
 endmodule

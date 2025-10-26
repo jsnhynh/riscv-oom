@@ -1,7 +1,7 @@
 import uarch_pkg::*;
 
 module decode (
-    input logic clk, rst, flush, cache_stall,
+    input logic clk, rst, flush,
 
     // Ports from Fetch
     output logic                        decode_rdy,
@@ -96,7 +96,7 @@ module decode (
     //-------------------------------------------------------------
     // Handshake and Pipeline Control
     //-------------------------------------------------------------
-    assign decode_rdy = rename_rdy && ~cache_stall;
+    assign decode_rdy = rename_rdy;
     assign decode_val = inst_val && decode_rdy;
 
 

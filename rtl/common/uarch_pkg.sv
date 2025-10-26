@@ -112,7 +112,7 @@ package ports_pkg;
         logic                       has_rd;     // Does this instruction write to a destination?
 
         // Result Storage
-        logic [CPU_DATA_BITS-1:0]   result;     // For branches, jump_pc is stored in upper 30 bits and LSB is taken/not-taken 
+        logic [CPU_DATA_BITS-1:0]   result;     // For branches, jump_pc is stored in upper 31 bits and LSB is taken/not-taken 
         logic                       has_exception;
 
         // Control Flow Information

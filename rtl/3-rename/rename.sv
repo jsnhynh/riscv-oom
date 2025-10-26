@@ -8,7 +8,7 @@
 import uarch_pkg::*;
 
 module rename (
-    input logic clk, rst, flush, cache_stall,
+    input logic clk, rst, flush,
 
     // Ports from Decode
     output logic            rename_rdy,
@@ -23,7 +23,7 @@ module rename (
     output logic [1:0]      rob_alloc_req,
     input  logic [1:0]      rob_alloc_gnt, // Grant for 0, 1, or 2 entries
     input  logic [TAG_WIDTH-1:0]    rob_tag0,               rob_tag1,
-    input  commit_write_port_t      commit_0_write_port,    commit_1_write_port
+    input  prf_commit_write_port_t  commit_0_write_port,    commit_1_write_port
 );
     //-------------------------------------------------------------
     // Internal Wires and Connections
@@ -36,7 +36,6 @@ module rename (
         .clk(clk),
         .rst(rst),
         .flush(flush),
-        .cache_stall(cache_stall),
 
         .rs1_0(decode_inst0.rs1),                   .rs1_1(decode_inst1.rs1),
         .rs2_0(decode_inst0.rs2),                   .rs2_1(decode_inst1.rs2),
@@ -59,7 +58,7 @@ module rename (
         input logic                 alloc_gnt
     );
         renamed_inst_t r_inst;
-        r_inst = `{default:`0};
+        r_inst = '{default:'0};
         r_inst.is_valid = alloc_gnt;
 
         // Pass-through fields from decode
@@ -140,7 +139,7 @@ module rename (
     // Handshake and Pipeline Control
     //-------------------------------------------------------------
     logic can_advance = ~decode_inst0.is_valid || (decode_inst0.is_valid && rob_alloc_gnt[0]);
-    assign rename_rdy = dispatch_rdy && ~cache_stall && can_advance;
+    assign rename_rdy = dispatch_rdy && can_advance;
     assign rename_val = rob_alloc_gnt[0] || rob_alloc_gnt[1];
 
     //-------------------------------------------------------------

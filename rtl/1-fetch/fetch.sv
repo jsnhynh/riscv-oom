@@ -1,7 +1,7 @@
 import uarch_pkg::*;
 
 module fetch (
-    input logic clk, rst, flush, cache_stall,
+    input  logic clk, rst, flush, icache_stall,
 
     input logic [2:0]                   pc_sel,
     input logic [CPU_ADDR_BITS-1:0]     rob_pc,
@@ -26,7 +26,7 @@ module fetch (
         .q(pc),
         .d(pc_next),
         .rst(rst),
-        .ce(~cache_stall && icache_re),
+        .ce(~icache_stall && icache_re),
         .clk(clk)
     ); 
 
@@ -34,7 +34,6 @@ module fetch (
         .clk(clk),
         .rst(rst),
         .flush(flush),
-        .cache_stall(cache_stall),
 
         .pc(pc),
         .icache_dout(icache_dout),
@@ -56,6 +55,6 @@ module fetch (
         endcase
     end
     assign icache_addr = pc;
-    assign icache_re = ~cache_stall && inst_buffer_rdy;
+    assign icache_re = ~icache_stall && inst_buffer_rdy;
 
 endmodule
