@@ -23,10 +23,10 @@ module inst_buffer (
   logic do_write = icache_dout_val && ~is_full;
   logic do_read  = decoder_rdy && ~is_empty;
 
-  always_ff @(posedge clk) begin
+  always_ff @(posedge clk or posedge rst or posedge flush) begin
     if (rst || flush) begin
-      read_ptr  <= 'd0;
-      write_ptr <= 'd0;
+      read_ptr  <= '0;
+      write_ptr <= '0;
     end else begin
       if (do_write) begin // Write
         inst_packet_reg[write_ptr]  <= icache_dout;
@@ -51,5 +51,5 @@ module inst_buffer (
   assign inst0    = read_packet[CPU_INST_BITS-1:0];
   assign inst1    = read_packet[FETCH_WIDTH*CPU_INST_BITS-1:CPU_INST_BITS];
   assign inst0_pc = pc_regs[read_ptr];
-  assign inst1_pc   = pc_regs[read_ptr] + 4;
+  assign inst1_pc = pc_regs[read_ptr] + 4;
 endmodule

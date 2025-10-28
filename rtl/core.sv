@@ -4,6 +4,7 @@
   This module encapsulates the processing logic of our
   cpu and contains ports to memory.
 */
+import riscv_isa_pkg::*;
 import uarch_pkg::*;
 
 module core (
@@ -21,10 +22,10 @@ module core (
   output logic                      dcache_re,
   input  logic [CPU_DATA_BITS-1:0]  dcache_dout,
   input  logic                      dcache_dout_val,
-  input  logic                      dcache_stall
+  input  logic                      dcache_stall,
   // DMEM Write Ports
   output logic [CPU_DATA_BITS-1:0]  dcache_din,
-  output logic [3:0]                dcache_we,
+  output logic [3:0]                dcache_we
 );
 
 endmodule

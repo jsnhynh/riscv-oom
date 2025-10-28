@@ -18,7 +18,7 @@ import uarch_pkg::*;
 
 module dispatch (
     // Ports from Rename
-    input  renamed_inst_t renamed_inst0, renamed_inst1;
+    input  renamed_inst_t renamed_inst0, renamed_inst1,
     output logic dispatch_rdy,
 
     // Ready from RS

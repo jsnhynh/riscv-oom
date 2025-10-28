@@ -15,7 +15,7 @@ module rob (
     output logic [TAG_WIDTH-1:0]    rob_tag0,               rob_tag1,
     
     // Ports to Rename (Commit)
-    output prf_commit_write_port_t  commit_0_write_port,    commit_1_write_port
+    output prf_commit_write_port_t  commit_0_write_port,    commit_1_write_port,
 
     // Ports from Dispatch
     input rob_entry_t               rob_entry0, rob_entry1,
@@ -40,6 +40,8 @@ module rob (
     rob_entry_t rob_entries_next [ROB_ENTRIES];
     logic [PTR_WIDTH:0] head, tail;
     logic [PTR_WIDTH:0] head_next, tail_next;
+    logic [PTR_WIDTH:0] head1 = head + 1;
+    logic [PTR_WIDTH:0] tail1 = tail + 1;
     logic [$clog2(ROB_ENTRIES):0] avail_slots;
     logic [1:0] commit_cnt;     // # insts commited this cycle
     logic [1:0] alloc_cnt;      // # insts allocated this cycle
@@ -48,25 +50,30 @@ module rob (
     // Pointer, Free Count, and Allocation Logic
     //-------------------------------------------------------------
     assign rob_alloc_gnt[0] = rob_alloc_req[0] && (avail_slots >= 1);
-    assign rob_alloc_gnt[1] = rob_alloc_req[1] && ((rob_alloc_req[0])? (avail_slots >= 2) : avail_slots >= 1);
+    assign rob_alloc_gnt[1] = rob_alloc_req[1] && ((rob_alloc_req[0])? (avail_slots >= 2) : (avail_slots >= 1));
     assign alloc_cnt = rob_we;
     always_ff @(posedge clk) begin // Pointer register logic
-        if (rst || flush) { head <= '0; tail <= '0; }
-        else { head <= head_next; tail <= tail_next; }
+        if (rst || flush) begin
+            head <= '0; 
+            tail <= '0;
+        end else begin
+            head <= head_next; 
+            tail <= tail_next;
+        end
     end
     always_comb begin // avail_slots calculation
-        if (head == tail) {
+        if (head == tail) begin
             avail_slots = (head[PTR_WIDTH] == tail[PTR_WIDTH]) ? DEPTH : 0;
-        } else if (tail > head) {
+        end else if (tail > head) begin
             avail_slots = DEPTH - (tail - head);
-        } else {
+        end else begin
             avail_slots = head - tail;
-        }
+        end
     end
     assign rob_rdy[0] = (avail_slots >= 1);
     assign rob_rdy[1] = (avail_slots >= 2);
     assign rob_tag0 = tail[PTR_WIDTH-1:0];
-    assign rob_tag1 = (tail+1)[PTR_WIDTH-1:0];
+    assign rob_tag1 = tail1[PTR_WIDTH-1:0];
     assign rob_head = head[PTR_WIDTH-1:0];
     assign rob_tail = tail[PTR_WIDTH-1:0];
 
@@ -111,7 +118,7 @@ module rob (
         if (!rst && !flush) begin
             for (int i = 0; i < ROB_ENTRIES; i++) begin
                 logic is_committed0 = (commit_cnt >= 1) && (i == head[PTR_WIDTH-1:0]);
-                logic is_committed1 = (commit_cnt >= 2) && (i == (head+1)[PTR_WIDTH-1:0]);
+                logic is_committed1 = (commit_cnt >= 2) && (i == head1[PTR_WIDTH-1:0]);
                 if (rob_entries[i].is_valid && !is_committed0 && !is_committed1) begin
                 rob_entries[i] <= rob_entries_next[i];
                 end else if (is_committed0 || is_committed1) begin
@@ -170,7 +177,7 @@ module rob (
 
     assign commit0_info = proc_commit(head[PTR_WIDTH-1:0]);
     // Only process second candidate if first doesnt flush
-    assign commit1_info = commit0_info.do_flush? '{default:'0} : proc_commit((head + 1)[PTR_WIDTH-1:0]);
+    assign commit1_info = commit0_info.do_flush? '{default:'0} : proc_commit(head1[PTR_WIDTH-1:0]);
 
     always_comb begin
         rob_pc  = '0;

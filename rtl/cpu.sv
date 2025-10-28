@@ -27,7 +27,7 @@ module cpu #(parameter SIMPLE_MEM_MODE = 1) (input clk, rst);
         .dcache_re(dcache_re),
         .dcache_dout(dcache_dout),
         .dcache_dout_val(dcache_dout_val),
-        .dcache_stall(dcache_stall)
+        .dcache_stall(dcache_stall),
         // DMEM Write Ports
         .dcache_din(dcache_din),
         .dcache_we(dcache_we)
@@ -50,7 +50,7 @@ module cpu #(parameter SIMPLE_MEM_MODE = 1) (input clk, rst);
                 .dcache_re(dcache_re),
                 .dcache_dout(dcache_dout),
                 .dcache_dout_val(dcache_dout_val),
-                .dcache_stall(dcache_stall)
+                .dcache_stall(dcache_stall),
                 // DMEM Write Ports
                 .dcache_din(dcache_din),
                 .dcache_we(dcache_we)

@@ -5,7 +5,7 @@ module decode (
 
     // Ports from Fetch
     output logic                        decode_rdy,
-    input  logic [CPU_ADDR_BITS-1-0]    inst0_pc,   inst1_pc,
+    input  logic [CPU_ADDR_BITS-1:0]    inst0_pc,   inst1_pc,
     input  logic [CPU_INST_BITS-1:0]    inst0,      inst1,
     input  logic                        inst_val,
 
@@ -32,12 +32,13 @@ module decode (
     function automatic decoded_inst_t decode_inst (
         input logic [CPU_ADDR_BITS-1:0] pc,
         input logic [CPU_INST_BITS-1:0] inst,
-        input logic                     val,
+        input logic                     val
     );
         decoded_inst_t d_inst;
         logic [6:0] opcode  = inst[6:0];
         logic [2:0] funct3  = inst[14:12];
         logic [6:0] funct7  = inst[31:25];
+        logic is_sub_sra    = (funct7 == FNC7_SUB_SRA);
 
         // Default values
         d_inst = '{default:'0};
@@ -78,7 +79,6 @@ module decode (
             default:            d_inst.alu_b_sel = 1'b1; // Use immediate
         endcase
 
-        logic is_sub_sra    = (funct7 == FNC7_SUB_SRA);
         casez (opcode)
             OPC_ARI_RTYPE, OPC_ARI_ITYPE:   d_inst.uop = {is_sub_sra, funct3};
             OPC_LOAD, OPC_STORE:            d_inst.uop = {'0, funct3};

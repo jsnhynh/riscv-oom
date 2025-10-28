@@ -7,7 +7,7 @@
     truth for all module interfaces.
 */
 
-package ports_pkg;
+package uarch_pkg;
     import riscv_isa_pkg::*;
 
     //-------------------------------------------------------------
@@ -15,9 +15,7 @@ package ports_pkg;
     //-------------------------------------------------------------
     // These are the "knobs" to configure the size and performance of your core.
     localparam CLK_PERIOD       = 10;       // 10ns = 100MHz clock
-    localparam FETCH_WIDTH      = 2;        // Number of instructions per fetch
-    localparam IMEM_SIZE_BYTES  = 32*1024;  // Example: 32KB Instruction Memory
-    localparam DMEM_SIZE_BYTES  = 32*1024;  // Example: 32KB Data Memory    
+    localparam FETCH_WIDTH      = 2;        // Number of instructions per fetch  
 
     localparam ROB_ENTRIES      = 32;
     localparam ALU_RS_ENTRIES   = 8;
