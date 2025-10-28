@@ -14,6 +14,11 @@ package ports_pkg;
     // Global Microarchitectural Parameters
     //-------------------------------------------------------------
     // These are the "knobs" to configure the size and performance of your core.
+    localparam CLK_PERIOD       = 10;       // 10ns = 100MHz clock
+    localparam FETCH_WIDTH      = 2;        // Number of instructions per fetch
+    localparam IMEM_SIZE_BYTES  = 32*1024;  // Example: 32KB Instruction Memory
+    localparam DMEM_SIZE_BYTES  = 32*1024;  // Example: 32KB Data Memory    
+
     localparam ROB_ENTRIES      = 32;
     localparam ALU_RS_ENTRIES   = 8;
     localparam MDU_RS_ENTRIES   = 4;

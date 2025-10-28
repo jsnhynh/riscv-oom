@@ -4,7 +4,7 @@ module inst_buffer (
 
   // Port from ICache
   input  logic [CPU_ADDR_BITS-1:0]    pc,
-  input  logic [2*CPU_INST_BITS-1:0]  icache_dout,
+  input  logic [FETCH_WIDTH*CPU_INST_BITS-1:0]  icache_dout,
   input  logic                        icache_dout_val,
   output logic                        inst_buffer_rdy,
 
@@ -49,7 +49,7 @@ module inst_buffer (
   // Read
   logic [2*CPU_INST_BITS-1:0] read_packet = inst_packet_reg[read_ptr];
   assign inst0    = read_packet[CPU_INST_BITS-1:0];
-  assign inst1    = read_packet[2*CPU_INST_BITS-1:CPU_INST_BITS];
+  assign inst1    = read_packet[FETCH_WIDTH*CPU_INST_BITS-1:CPU_INST_BITS];
   assign inst0_pc = pc_regs[read_ptr];
   assign inst1_pc   = pc_regs[read_ptr] + 4;
 endmodule

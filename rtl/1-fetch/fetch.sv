@@ -8,9 +8,9 @@ module fetch (
     
     // IMEM Ports
     output logic [CPU_ADDR_BITS-1:0]    icache_addr,
-    input  logic [2*CPU_ADDR_BITS-1:0]  icache_dout,
-    input  logic                        icache_dout_val,
     output logic                        icache_re,
+    input  logic [FETCH_WIDTH*CPU_ADDR_BITS-1:0]  icache_dout,
+    input  logic                        icache_dout_val,
 
     // Decoder Ports
     input  logic                        decoder_rdy,
@@ -54,7 +54,7 @@ module fetch (
             default: pc_next = pc + 8; 
         endcase
     end
-    assign icache_addr = pc;
+    assign icache_addr = pc_next;
     assign icache_re = ~icache_stall && inst_buffer_rdy;
 
 endmodule

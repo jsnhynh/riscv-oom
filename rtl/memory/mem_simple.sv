@@ -8,9 +8,6 @@
 import uarch_pkg::*;
 
 module mem_simple #(
-    parameter FETCH_WIDTH       = 2,            // Number of instructions per fetch
-    parameter IMEM_SIZE_BYTES   = 32 * 1024,    // Example: 32KB Instruction Memory
-    parameter DMEM_SIZE_BYTES   = 32 * 1024,    // Example: 32KB Data Memory    
     parameter IMEM_HEX_FILE     = "program.hex" // Default hex file to load
     parameter DMEM_HEX_FILE     = ""            // Optional hex file for DMEM preload
 )(
