@@ -5,7 +5,7 @@ import uarch_pkg::*;
 
 module fetch_tb;
     localparam TEST_FILE = "fetch_test.hex";
-    localparam MEM_SIZE        = 1024;
+    localparam MEM_SIZE = 120;
 
     // Testbench Signals
     logic clk;
@@ -53,9 +53,7 @@ module fetch_tb;
     );
 
     mem_simple #(
-        .IMEM_HEX_FILE(TEST_FILE), 
-        .IMEM_SIZE_BYTES(MEM_SIZE),
-        .DMEM_SIZE_BYTES(1)
+        .IMEM_HEX_FILE(TEST_FILE)
     ) mem (
         .clk(clk),
         .rst(rst),
@@ -91,25 +89,6 @@ module fetch_tb;
         rob_pc_i = '0;
         decoder_rdy_i = 1;
 
-        // Create the hex file with repeating patterns
-        begin
-            automatic int fd = $fopen(TEST_FILE, "w");
-            automatic logic [CPU_INST_BITS-1:0] pattern = 32'h11111111;
-            for (int i = 0; i < MEM_SIZE / 4; i=i+1) begin // Iterate through words
-                // Write two instructions (one 64-bit line) per address increment of 8
-                if ((PC_RESET + i*4) < (PC_RESET + MEM_SIZE)) begin // Basic bounds check
-                   $fdisplay(fd, "%h", pattern); // Word at Addr + i*4
-                end
-                 pattern = pattern + 32'h11111111; // Next pattern
-            end
-            // Specific instruction for redirect target
-            if (32'hA000 < (PC_RESET + MEM_SIZE))
-                $fdisplay(fd, "@a000\n%h", 32'hAAAAAAAA);
-            if (32'hA004 < (PC_RESET + MEM_SIZE))
-                $fdisplay(fd, "@a004\n%h", 32'hBBBBBBBB);
-            $fclose(fd);
-        end
-
         // Reset Sequence
         #1; @(posedge clk); rst = 0;
         $display("[%0t] Reset Released. PC should be at reset vector %h.", $time, PC_RESET);
@@ -119,34 +98,41 @@ module fetch_tb;
         $display("[%0t] Test 1: Sequential Fetching...", $time);
         // assert (icache_addr == PC_RESET) else $fatal(1, "[%0t] PC did not reset correctly. Addr=%h", $time, icache_addr);
         repeat (5) @(posedge clk); // Let a few fetches happen
-
+        
+        
         // -- Test 2: Decoder Stall --
         $display("[%0t] Test 2: Decoder Stall...", $time);
         decoder_rdy_i = 0; // Stall the decoder
-        repeat (3) @(posedge clk); // Hold stall
-        decoder_rdy_i = 1; // Release stall
+        repeat (3) begin
+            @(posedge clk); // Hold stall
+            $display("OUT: PC:%h Inst0:%h | PC4:%h Inst1:%h | Inst Val:%b | ***STALLED",
+            inst0_pc_o, inst0_o, inst1_pc_o, inst1_o, inst_val_o);
+        end        decoder_rdy_i = 1; // Release stall
         repeat (2) @(posedge clk);    // Allow recovery
 
         // -- Test 3: I-Cache Stall --
         $display("[%0t] Test 3: Cache Stall...", $time);
         icache_stall_i = 1; // Stall the fetch stage
-        repeat (3) @(posedge clk); // Hold stall
+        repeat (5) begin
+            @(posedge clk); // Hold stall
+            $display("OUT: PC:%h Inst0:%h | PC4:%h Inst1:%h | Inst Val:%b | ***STALLED",
+            inst0_pc_o, inst0_o, inst1_pc_o, inst1_o, inst_val_o);
+        end
         icache_stall_i = 0; // Release stall
         repeat (3) @(posedge clk);     // Allow recovery
 
         // --- Test 4: Branch/Jump Redirect ---
         $display("[%0t] Test 4: Redirect...", $time);
         pc_sel_i = 3'b001; // Select ROB PC
-        rob_pc_i = 32'h0000_A000;
+        rob_pc_i = 32'h0000_0004;
         flush_i  = 1;       // Assert flush to force redirect
         @(posedge clk);
         flush_i = 0;        // De-assert flush for next cycle fetch
         pc_sel_i = '0;
-        @(posedge clk);     // PC updates, new fetch issued to A000
-        assert (icache_addr == 32'h0000_A000) else $fatal(1, "[%0t] Redirect failed. Addr=%h", $time, icache_addr);
-        @(posedge clk);     // Memory responds for A000.
-        @(posedge clk);     // Buffer outputs AAAA, BBBB.
-        @(posedge clk);     // Fetch A008.
+        repeat(2) @(posedge clk);     // PC updates, new fetch issued to 0004
+        assert (inst0_pc_o == 32'h0000_0004) else $fatal(1, "[%0t] Redirect failed. Addr=%h", $time, icache_addr);
+        repeat (5) @(posedge clk);
+        
 
         #100; // Run for a bit longer
         $display("[%0t] Testbench Finished.", $time);
@@ -156,8 +142,11 @@ module fetch_tb;
     initial begin
         @(negedge rst);
         #1;
-        $monitor("[%0t] PC:%h Inst0:%h | PC4:%h Inst1:%h | Decoder Val:%b",
-            $time, inst0_pc_o, inst0_o, inst1_pc_o, inst1_o, inst_val_o);
+        $monitor ("IN: flush:%b | stall:%b | decode_rdy:%b",
+            flush_i, icache_stall_i, decoder_rdy_i);
+        $monitor("OUT: PC:%h Inst0:%h | PC4:%h Inst1:%h | Inst Val:%b | IB_EMPTY:%d",
+            inst0_pc_o, inst0_o, inst1_pc_o, inst1_o, inst_val_o, dut.ib.is_empty);
+
     end
 
 endmodule

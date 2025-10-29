@@ -1,3 +1,6 @@
+import riscv_isa_pkg::*;
+import uarch_pkg::*;
+
 module inst_buffer (
   // Module I/O
   input logic clk, rst, flush,
@@ -20,13 +23,16 @@ module inst_buffer (
   logic [CPU_ADDR_BITS-1:0]    pc_regs         [INST_BUFFER_DEPTH-1:0];
   logic [2*CPU_INST_BITS-1:0]  inst_packet_reg [INST_BUFFER_DEPTH-1:0];
 
-  logic do_write = icache_dout_val && ~is_full;
-  logic do_read  = decoder_rdy && ~is_empty;
+  logic do_write, do_read;
+  assign do_write = icache_dout_val && inst_buffer_rdy && ~flush;
+  assign do_read  = decoder_rdy && ~is_empty && ~flush;
 
   always_ff @(posedge clk or posedge rst or posedge flush) begin
     if (rst || flush) begin
       read_ptr  <= '0;
       write_ptr <= '0;
+      pc_regs <= '{default:'0};
+      inst_packet_reg <= '{default:'0};
     end else begin
       if (do_write) begin // Write
         inst_packet_reg[write_ptr]  <= icache_dout;
@@ -44,12 +50,13 @@ module inst_buffer (
   assign is_empty = (read_ptr == write_ptr);
 
   assign inst_buffer_rdy  = ~is_full;
-  assign inst_val         = ~is_empty;
+  assign inst_val         = ~is_empty && ~rst && ~flush && decoder_rdy;
 
   // Read
-  logic [2*CPU_INST_BITS-1:0] read_packet = inst_packet_reg[read_ptr];
-  assign inst0    = read_packet[CPU_INST_BITS-1:0];
-  assign inst1    = read_packet[FETCH_WIDTH*CPU_INST_BITS-1:CPU_INST_BITS];
-  assign inst0_pc = pc_regs[read_ptr];
-  assign inst1_pc = pc_regs[read_ptr] + 4;
+  logic [2*CPU_INST_BITS-1:0] read_packet;
+  assign read_packet = inst_packet_reg[read_ptr];
+  assign inst0    = (inst_val)? read_packet[CPU_INST_BITS-1:0] : '0;
+  assign inst1    = (inst_val)? read_packet[FETCH_WIDTH*CPU_INST_BITS-1:CPU_INST_BITS] : '0;
+  assign inst0_pc = (inst_val)? pc_regs[read_ptr] : '0;
+  assign inst1_pc = (inst_val)? pc_regs[read_ptr] + 4 : '0;
 endmodule

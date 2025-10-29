@@ -12,7 +12,7 @@ package riscv_isa_pkg;
     localparam CPU_INST_BITS = 32;
     localparam CPU_DATA_BITS = 32;
     localparam ARCH_REGS     = 32;
-    localparam PC_RESET      = 32'h00002000;
+    localparam PC_RESET      = 32'h00000000;
 
     //-------------------------------------------------------------
     // RISC-V ISA Encodings
