@@ -19,7 +19,7 @@ This repository contains the Verilog implementation of a dual-issue, 8-stage, ou
     * 2 Load-Store Queues (LSQ)
 * **Functional Units:**
     * 2 Arithmetic Logic Units (ALUs) for integer and branch operations.
-    * 1 dedicated Multiplier/Divider Unit.
+    * 1 Dedicated Multiplier/Divider Unit.
     * 1 Memory Unit for loads and stores.
 * **Writeback:** Dual Common Data Buses (CDB) for result broadcasting.
 
