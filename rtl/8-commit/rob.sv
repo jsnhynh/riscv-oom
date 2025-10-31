@@ -1,3 +1,12 @@
+/*
+    Commit Stage
+
+    This module contains the ROB, which allocates and renamed 
+    instructions and commits instructions in order. It also 
+    communicates with the LSQ to decide valid stores.
+*/
+
+import riscv_isa_pkg::*;
 import uarch_pkg::*;
 
 module rob (
@@ -17,7 +26,7 @@ module rob (
     output prf_commit_write_port_t  commit_0_write_port,    commit_1_write_port,
 
     // Ports from Dispatch
-    output  logic [1:0]              rob_rdy,
+    output  logic [1:0]             rob_rdy,
     input  logic [1:0]              rob_we,
     input  rob_entry_t              rob_entry0, rob_entry1,
 

@@ -30,7 +30,7 @@ module issue (
     output logic [3:0]                  dcache_we
     input  logic                        dcache_stall,
 
-    input  logic            alu_rdy0, alu_rdy1, mdu_rdy,
+    input  logic            alu_rdy0, alu_rdy1, mdu_rdy, dmem_rdy,
     output execute_packet_t dmem_packet,
     output execute_packet_t alu_packet0, 
     output execute_packet_t alu_packet1, 

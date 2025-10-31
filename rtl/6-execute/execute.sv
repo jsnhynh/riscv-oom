@@ -19,9 +19,11 @@ module execute (
     input  logic [CPU_DATA_BITS-1:0]    dcache_dout,
     input  logic                        dcache_dout_val,
 
-    // Ports to CDBs
-    input  logic                alu_done0, alu_done1, mdu_done,
-    output writeback_packet_t   cdb_port0, cdb_port1
+    // CDB Ports
+    output writeback_packet_t   alu_result0, alu_result1, mdu_result, dcache_result,
+    input  logic                alu_cdb_gnt0, alu_cdb_gnt1, mdu_cdb_gnt, dcache_cdb_gnt,
+
+    input  writeback_packet_t   cdb_port0, cdb_port1    // Forward Ports
 );
 
 endmodule
