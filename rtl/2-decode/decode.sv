@@ -1,3 +1,4 @@
+import riscv_isa_pkg::*;
 import uarch_pkg::*;
 
 module decode (
@@ -12,7 +13,6 @@ module decode (
     // Ports to Rename
     input  logic            rename_rdy,
     output decoded_inst_t   decode_inst0,   decode_inst1,
-    output logic            decode_val
 );
 
     //-------------------------------------------------------------
@@ -97,8 +97,6 @@ module decode (
     // Handshake and Pipeline Control
     //-------------------------------------------------------------
     assign decode_rdy = rename_rdy;
-    assign decode_val = inst_val && decode_rdy;
-
 
     //-------------------------------------------------------------
     // Control Signal Generation

@@ -1,3 +1,4 @@
+import riscv_isa_pkg::*;
 import uarch_pkg::*;
 
 module prf (

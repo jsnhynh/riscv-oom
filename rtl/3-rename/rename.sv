@@ -5,6 +5,7 @@
     the PRF for operand status and writes new tag mappings back to the
     PRF's RAT. Actual ROB write is handled by the dispatch stage.
 */
+import riscv_isa_pkg::*;
 import uarch_pkg::*;
 
 module rename (
@@ -15,9 +16,9 @@ module rename (
     input  decoded_inst_t   decode_inst0,   decode_inst1,
 
     // Ports to Dispatch
+    input  logic            dispatch_rdy,
     output renamed_inst_t   renamed_inst0,  renamed_inst1,
     output logic            rename_val,
-    input  logic            dispatch_rdy,
 
     // Ports from ROB
     output logic [1:0]      rob_alloc_req,

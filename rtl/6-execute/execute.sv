@@ -1,2 +1,27 @@
-import uarch_pkg::*;
+/*
+    Execute Stage - Execute Unit
 
+    This module encapsulates all Functional Units
+*/
+
+import riscv_isa_pkg::*;
+import uarch_pkg::*;
+module execute (
+    input  logic clk, rst,
+
+    // Ports from Issue
+    output logic                alu_rdy0, alu_rdy1, mdu_rdy,
+    input  execute_packet_t     dmem_packet,
+    input  execute_packet_t     alu_packet0, 
+    input  execute_packet_t     alu_packet1, 
+    input  execute_packet_t     mdu_packet,
+
+    input  logic [CPU_DATA_BITS-1:0]    dcache_dout,
+    input  logic                        dcache_dout_val,
+
+    // Ports to CDBs
+    input  logic                alu_done0, alu_done1, mdu_done,
+    output writeback_packet_t   cdb_port0, cdb_port1
+);
+
+endmodule

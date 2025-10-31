@@ -13,32 +13,29 @@
     Handles resource hazards and stalls Rename if resources are 
     unavailable.
 */
-
+import riscv_isa_pkg::*;
 import uarch_pkg::*;
 
 module dispatch (
     // Ports from Rename
-    input  renamed_inst_t renamed_inst0, renamed_inst1,
     output logic dispatch_rdy,
+    input  renamed_inst_t renamed_inst0, renamed_inst1,
 
-    // Ready from RS
+    // Ports to RS
     input  logic [1:0]      alu_rs_rdy,
     input  logic [1:0]      mdu_rs_rdy,
-    input  logic [1:0]      lsq_rdy,
-    input  logic [1:0]      rob_rdy, // 00: 0 rdy, 01: 1 rdy, 10/11: 2+ rdy
+    input  logic [1:0]      lsq_rs_rdy,
 
-    // Write Ports to RS
-    // to alu rs
     output logic [1:0]      alu_rs_we,
-    output renamed_inst_t   alu_rs_entry0, alu_rs_entry1,
-    // to mdu rs
     output logic [1:0]      mdu_rs_we,
-    output renamed_inst_t   mdu_rs_entry0, mdu_rs_entry1,
-    // to lsq
     output logic [1:0]      lsq_rs_we,
+
+    output renamed_inst_t   alu_rs_entry0, alu_rs_entry1,
+    output renamed_inst_t   mdu_rs_entry0, mdu_rs_entry1,
     output renamed_inst_t   lsq_rs_entry0, lsq_rs_entry1,
 
-    // Write Ports to ROB
+    // Ports to ROB
+    input  logic [1:0]      rob_rdy, // 00: 0 rdy, 01: 1 rdy, 10/11: 2+ rdy
     output logic [1:0]      rob_we,
     output rob_entry_t      rob_entry0, rob_entry1
 );
@@ -63,7 +60,7 @@ module dispatch (
     assign can_dispatch0 =  rob_rdy[0] && (
                             (is_alu0 && alu_rs_rdy[0]) || 
                             (is_mdu0 && mdu_rs_rdy[0]) || 
-                            (is_lsq0 && lsq_rdy[0]));
+                            (is_lsq0 && lsq_rs_rdy[0]));
 
     // -- Step 3: Determine if inst 1 can be dispatched --
     logic rob_avail_for_inst1 = (can_dispatch0)? rob_rdy[1] : rob_rdy[0];

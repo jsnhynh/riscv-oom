@@ -4,8 +4,9 @@ import uarch_pkg::*;
 module fetch (
     input  logic clk, rst, flush, icache_stall,
 
-    input logic [2:0]                   pc_sel,
-    input logic [CPU_ADDR_BITS-1:0]     rob_pc,
+    // Ports from ROB
+    input  logic [2:0]                   pc_sel,
+    input  logic [CPU_ADDR_BITS-1:0]     rob_pc,
     
     // IMEM Ports
     output logic [CPU_ADDR_BITS-1:0]    icache_addr,
@@ -13,7 +14,7 @@ module fetch (
     input  logic [FETCH_WIDTH*CPU_ADDR_BITS-1:0]  icache_dout,
     input  logic                        icache_dout_val,
 
-    // Decoder Ports
+    // Ports to Decoder
     input  logic                        decoder_rdy,
     output logic [CPU_ADDR_BITS-1:0]    inst0_pc,     inst1_pc,
     output logic [CPU_INST_BITS-1:0]    inst0,  inst1,

@@ -3,7 +3,6 @@ import uarch_pkg::*;
 module rob (
     // Module I/O
     input  logic clk, rst,
-    input  logic [1:0] rob_rdy,
 
     // Control Signals
     output logic flush,
@@ -18,8 +17,9 @@ module rob (
     output prf_commit_write_port_t  commit_0_write_port,    commit_1_write_port,
 
     // Ports from Dispatch
-    input rob_entry_t               rob_entry0, rob_entry1,
-    input logic [1:0]               rob_we,
+    output  logic [1:0]              rob_rdy,
+    input  logic [1:0]              rob_we,
+    input  rob_entry_t              rob_entry0, rob_entry1,
 
     // Ports from CDB
     input  writeback_packet_t       cdb_port0, cdb_port1,

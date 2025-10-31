@@ -21,7 +21,6 @@ module cpu #(parameter SIMPLE_MEM_MODE = 1) (input clk, rst);
         .icache_dout(icache_dout),
         .icache_dout_val(icache_dout_val),
         .icache_stall(icache_stall),
-
         // DMEM Ports
         .dcache_addr(dcache_addr),
         .dcache_re(dcache_re),
@@ -44,7 +43,6 @@ module cpu #(parameter SIMPLE_MEM_MODE = 1) (input clk, rst);
                 .icache_dout(icache_dout),
                 .icache_dout_val(icache_dout_val),
                 .icache_stall(icache_stall),
-
                 // DMEM Ports
                 .dcache_addr(dcache_addr),
                 .dcache_re(dcache_re),
