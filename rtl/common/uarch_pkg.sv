@@ -145,4 +145,40 @@ package uarch_pkg;
         logic                           we;
     } prf_commit_write_port_t;
 
+
+    /*
+        The following structs is used to pass decoded instructions down the pipeline to the FU
+    */
+    typedef struct packed {
+        logic [CPU_DATA_BITS-1:0]   data,
+        logic [TAG_WIDTH-1:0]       tag,        // is_renamed? renamed_tag / reg_addr
+        logic                       is_renamed
+    } source_t;
+
+    typedef struct packed {
+        logic [CPU_ADDR_BITS-1:0] pc,
+        logic [TAG_WIDTH-1:0] dest_tag,
+
+        /* 2 Sources + Operation */
+        source_t    src_0_a,    // a_sel? PC  : RS1
+        source_t    src_0_b,    // b_sel? IMM : RS2
+        logic [3:0] uop_0,      // {Func7[i], Func3}, where i is bit index we check per inst
+
+        /* 2 Sources + Operation, used for parallel operations/additional data ie:BRANCHES/STORE*/
+        source_t    src_1_a,    // Always RS1 (For Branches)
+        source_t    src_1_b,    // Always RS2 (For Branches/Store_Data)
+        logic [3:0] uop_1,      // {0, Func3} // Used for Branch Operation, use ADD for uop_0
+
+        // Control Signals
+        logic is_valid,
+        logic br_taken,         // Set to 1 if jump, can be later used for Branch Prediction
+        logic [2:0] opcode
+        /* Upper 3 Bits of Opcode can be adeqetly used to determine function type
+            011, 001, 111: ALU
+            000: MEM_LOAD
+            010: MEM_STORE
+            110: BRANCH / JUMP
+        */
+    } instruction_t
+
 endpackage
