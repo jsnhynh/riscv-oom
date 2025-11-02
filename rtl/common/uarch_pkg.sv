@@ -162,7 +162,7 @@ package uarch_pkg;
         /* 2 Sources + Operation */
         source_t    src_0_a,    // a_sel? PC  : RS1
         source_t    src_0_b,    // b_sel? IMM : RS2
-        logic [3:0] uop_0,      // {Func7[i], Func3}, where i is bit index we check per inst
+        logic [3:0] uop_0,      // {Func7[i], Func3}, where i is bit index we check per inst (SUB/SRC: bit[25], MUL: bit[31])
 
         /* 2 Sources + Operation, used for parallel operations/additional data ie:BRANCHES/STORE*/
         source_t    src_1_a,    // Always RS1 (For Branches)
