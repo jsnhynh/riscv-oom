@@ -150,7 +150,7 @@ package uarch_pkg;
         The following structs is used to pass decoded instructions down the pipeline to the FU
     */
     typedef struct packed {
-        logic [CPU_DATA_BITS-1:0]   data,
+        logic [CPU_DATA_BITS-1:0]   data,       // Reference if is_renamed == 1, else snoop CDB with tag
         logic [TAG_WIDTH-1:0]       tag,        // is_renamed? renamed_tag / reg_addr
         logic                       is_renamed
     } source_t;
