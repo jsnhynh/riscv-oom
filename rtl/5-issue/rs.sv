@@ -1,12 +1,12 @@
 module rs (
     input logic clk, rst, flush, cache_stall,
     // Ports from Displatch
-    input renamed_inst_t rs_entry,
+    input instruction_t rs_entry,
     //Ports to Dispatch
     output logic rs_rdy,
 
     //Ports to Execute
-    output  execute_packet_t execute_pkt,
+    output  instruction_t execute_pkt,
 
     //Ports from Execute
     input logic alu_re,
@@ -15,41 +15,43 @@ module rs (
     input writeback_packet_t cdb_port0, cdb_port1
 );
 
-    bit rs1_data_in_cdb0, rs2_data_in_cdb0, rs1_data_in_cdb1, rs2_data_in_cdb1;
-    assign rs1_data_in_cdb0 = rs_entry_ff.rs1_renamed && (cdb_port0.is_valid && (cdb_port0.dest_tag == rs_entry_ff.rs1_tag));
-    assign rs2_data_in_cdb0 = rs_entry_ff.rs2_renamed && (cdb_port0.is_valid && (cdb_port0.dest_tag == rs_entry_ff.rs2_tag));
-    assign rs1_data_in_cdb1 = rs_entry_ff.rs1_renamed && (cdb_port1.is_valid && (cdb_port1.dest_tag == rs_entry_ff.rs1_tag));
-    assign rs2_data_in_cdb1 = rs_entry_ff.rs2_renamed && (cdb_port1.is_valid && (cdb_port1.dest_tag == rs_entry_ff.rs2_tag));
+    bit src_0_a_data_in_cdb0, src_0_b_data_in_cdb0, src_0_a_data_in_cdb1, src_0_b_data_in_cdb1;
+    bit src_1_a_data_in_cdb0, src_1_b_data_in_cdb0, src_1_a_data_in_cdb1, src_1_b_data_in_cdb1;
+    
+    assign src_0_a_data_in_cdb0 = execute_pkt.src_0_a.is_renamed && (cdb_port0.is_valid && (cdb_port0.dest_tag == execute_pkt.src_0_a.tag));
+    assign src_0_b_data_in_cdb0 = execute_pkt.src_0_b.is_renamed && (cdb_port0.is_valid && (cdb_port0.dest_tag == execute_pkt.src_0_b.tag));
+    assign src_0_a_data_in_cdb1 = execute_pkt.src_0_a.is_renamed && (cdb_port1.is_valid && (cdb_port1.dest_tag == execute_pkt.src_0_a.tag));
+    assign src_0_b_data_in_cdb1 = execute_pkt.src_0_b.is_renamed && (cdb_port1.is_valid && (cdb_port1.dest_tag == execute_pkt.src_0_b.tag));
+    
+    assign src_1_a_data_in_cdb0 = execute_pkt.src_1_a.is_renamed && (cdb_port0.is_valid && (cdb_port0.dest_tag == execute_pkt.src_1_a.tag));
+    assign src_1_b_data_in_cdb0 = execute_pkt.src_1_b.is_renamed && (cdb_port0.is_valid && (cdb_port0.dest_tag == execute_pkt.src_1_b.tag));
+    assign src_1_a_data_in_cdb1 = execute_pkt.src_1_a.is_renamed && (cdb_port1.is_valid && (cdb_port1.dest_tag == execute_pkt.src_1_a.tag));
+    assign src_1_b_data_in_cdb1 = execute_pkt.src_1_b.is_renamed && (cdb_port1.is_valid && (cdb_port1.dest_tag == execute_pkt.src_1_b.tag));
+
     //rs_entry register
-    renamed_inst_t rs_entry_ff;
     always_ff @( posedge clk ) begin 
-        if (rst || flush) rs_entry_ff <= '0;
+        if (rst || flush) execute_pkt <= '0;
         else begin //updating rs reg with new value
-            if(rs_entry.is_valid && rs_rdy && !cache_stall) rs_entry_ff <= rs_entry;
+            if(rs_entry.is_valid && rs_rdy && !cache_stall) execute_pkt <= rs_entry;
             else begin //updating rs reg with cdb port
-                if(rs1_data_in_cdb0 || rs1_data_in_cdb1) rs_entry_ff.rs1_renamed <= 1'b0;
-                if(rs2_data_in_cdb0 || rs2_data_in_cdb1) rs_entry_ff.rs2_renamed <= 1'b0;
-                if(rs1_data_in_cdb0) rs_entry_ff.rs1_data <= cdb_port0.result;
-                else if (rs1_data_in_cdb1) rs_entry_ff.rs1_data <= cdb_port1.result;
-                if(rs2_data_in_cdb0) rs_entry_ff.rs2_data <= cdb_port0.result;
-                else if (rs2_data_in_cdb1) rs_entry_ff.rs2_data <= cdb_port1.result;
+                if(src_0_a_data_in_cdb0 || src_0_a_data_in_cdb1) execute_pkt.src_0_a_renamed <= 1'b0;
+                if(src_0_b_data_in_cdb0 || src_0_b_data_in_cdb1) execute_pkt.src_0_b_renamed <= 1'b0;
+                if(src_1_a_data_in_cdb0 || src_1_a_data_in_cdb1) execute_pkt.src_1_a_renamed <= 1'b0;
+                if(src_1_b_data_in_cdb0 || src_1_b_data_in_cdb1) execute_pkt.src_1_b_renamed <= 1'b0;
+
+                if      (src_0_a_data_in_cdb0) execute_pkt.src_0_a.data <= cdb_port0.result;
+                else if (src_0_a_data_in_cdb1) execute_pkt.src_0_a.data <= cdb_port1.result;
+                if      (src_0_b_data_in_cdb0) execute_pkt.src_0_b.data <= cdb_port0.result;
+                else if (src_0_b_data_in_cdb1) execute_pkt.src_0_b.data <= cdb_port1.result;
+                
+                if      (src_1_a_data_in_cdb0) execute_pkt.src_1_a.data <= cdb_port0.result;
+                else if (src_1_a_data_in_cdb1) execute_pkt.src_1_a.data <= cdb_port1.result;
+                if      (src_1_b_data_in_cdb0) execute_pkt.src_1_b.data <= cdb_port0.result;
+                else if (src_1_b_data_in_cdb1) execute_pkt.src_1_b.data <= cdb_port1.result;
             end
         end
     end
 
-    always_comb begin 
-        execute_pkt.dest_tag = rs_entry_ff.dest_tag;
-        execute_pkt.operand_a = ?;
-        execute_pkt.operand_b = ?;
-        execute_pkt.uop = rs_entry_ff.uop;
-        execute_pkt.is_branch = rs_entry_ff.is_branch;
-        execute_pkt.uop_br = rs_entry_ff.uop_br;
-        execute_pkt.rs1_data = rs_entry_ff.rs1_data;
-        execute_pkt.rs2_data = rs_entry_ff.rs2_data;
-        execute_pkt.is_load = rs_entry_ff.is_load;
-        execute_pkt.is_store = rs_entry_ff.is_store;
-        execute_pkt.store_data = ?;
-    end
 
 typedef enum bit {PASS_THRU, STALLED} rs_state_e;
 rs_state_e state, nxt_state;
@@ -70,7 +72,7 @@ always_comb begin
     case (state)
         PASS_THRU: begin
             if(rs_entry.is_valid) begin
-                if( !rs_entry_ff.rs1_renamed &&  !rs_entry_ff.rs2_renamed && alu_re) begin
+                if( !execute_pkt.src_0_a_renamed &&  !execute_pkt.src_0_b_renamed && alu_re) begin
                     next_state = PASS_THRU;
                     valid_nxt = 1'b1; 
                     rs_rdy = 1'b1;
@@ -80,7 +82,7 @@ always_comb begin
             else rs_entry.is_valid = 1'b1;
         end 
         STALLED: begin
-            if(!rs_entry_ff.rs1_renamed && !rs_entry_ff.rs2_renamed && alu_re) begin
+            if(!execute_pkt.src_0_a_renamed && !execute_pkt.src_0_b_renamed && alu_re) begin
                 next_state = PASS_THRU;
                 valid_nxt = 1'b1;
                 rs_rdy = 1'b1;
