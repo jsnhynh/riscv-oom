@@ -2,6 +2,7 @@ module rs (
     input logic clk, rst, flush, cache_stall,
     // Ports from Displatch
     input instruction_t rs_entry,
+    input bit rs_we,
     //Ports to Dispatch
     output logic rs_rdy,
 
@@ -32,7 +33,7 @@ module rs (
     always_ff @( posedge clk ) begin 
         if (rst || flush) execute_pkt <= '0;
         else begin //updating rs reg with new value
-            if(rs_entry.is_valid && rs_rdy && !cache_stall) execute_pkt <= rs_entry;
+            if(rs_entry.is_valid && rs_rdy && !cache_stall && rs_we) execute_pkt <= rs_entry;
             else begin //updating rs reg with cdb port
                 if(src_0_a_data_in_cdb0 || src_0_a_data_in_cdb1) execute_pkt.src_0_a_renamed <= 1'b0;
                 if(src_0_b_data_in_cdb0 || src_0_b_data_in_cdb1) execute_pkt.src_0_b_renamed <= 1'b0;
@@ -71,7 +72,7 @@ always_comb begin
     rs_rdy = 1'b0;
     case (state)
         PASS_THRU: begin
-            if(rs_entry.is_valid) begin
+            if(rs_entry.is_valid && rs_we) begin
                 if( !execute_pkt.src_0_a_renamed &&  !execute_pkt.src_0_b_renamed && alu_re) begin
                     next_state = PASS_THRU;
                     valid_nxt = 1'b1; 
