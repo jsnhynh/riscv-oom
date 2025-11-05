@@ -4,8 +4,8 @@ module rs (
     input instruction_t rs_entry,
     input bit rs_we,
     //Ports to Dispatch
-    output logic rs_rdy,
-
+    output bit rs_write_rdy,
+    output bit rs_read_rdy,
     //Ports to Execute
     output  instruction_t execute_pkt,
 
