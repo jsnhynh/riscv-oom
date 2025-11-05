@@ -12,11 +12,11 @@ This repository contains the Verilog implementation of a dual-issue, 8-stage, ou
 * **Pipeline:** 8-Stage speculative pipeline.
 * **Branch Prediction:** Static predict-not-taken model.
 * **Frontend:** Decoupled Fetch and Decode stages with an Instruction Buffer to hide memory latency.
-* **Renaming:** Register Renaming is performed using an integrated Register Alias Table (RAT) and Physical Register File, with a Reorder Buffer (ROB) providing instruction tags.
+* **Renaming:** Register Renaming is performed using a unified Register Alias Table (RAT) and Physical Register File, with a Reorder Buffer (ROB) providing instruction tags.
 * **Backend Queues:**
     * 1 Unified ALU Reservation Station (RS)
     * 1 Dedicated MUL/DIV Reservation Station (RS)
-    * 2 Load-Store Queues (LSQ)
+    * 2 Load-Store Queues (LSQ) (Load RS, Store Queue)
 * **Functional Units:**
     * 2 Arithmetic Logic Units (ALUs) for integer and branch operations.
     * 1 Dedicated Multiplier/Divider Unit.
