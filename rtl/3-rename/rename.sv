@@ -13,11 +13,11 @@ module rename (
 
     // Ports from Decode
     output logic            rename_rdy,
-    input  decoded_inst_t   decode_inst0,   decode_inst1,
+    input  instruction_t    decode_inst0,   decode_inst1,
 
     // Ports to Dispatch
     input  logic            dispatch_rdy,
-    output renamed_inst_t   renamed_inst0,  renamed_inst1,
+    output instruction_t    renamed_inst0,  renamed_inst1,
     output logic            rename_val,
 
     // Ports from ROB
@@ -29,8 +29,8 @@ module rename (
     //-------------------------------------------------------------
     // Internal Wires and Connections
     //-------------------------------------------------------------
-    prf_read_port_t rs1_0_read_port, rs2_0_read_port;
-    prf_read_port_t rs2_1_read_port, rs1_1_read_port;
+    source_t rs1_0_read_port, rs2_0_read_port;
+    source_t rs2_1_read_port, rs1_1_read_port;
     prf_rat_write_port_t rat_0_write_port, rat_1_write_port;
 
     prf prf_inst (
@@ -38,8 +38,8 @@ module rename (
         .rst(rst),
         .flush(flush),
 
-        .rs1_0(decode_inst0.rs1),                   .rs1_1(decode_inst1.rs1),
-        .rs2_0(decode_inst0.rs2),                   .rs2_1(decode_inst1.rs2),
+        .rs1_0(decode_inst0.src_1_a),               .rs1_1(decode_inst1.src_1_a),
+        .rs2_0(decode_inst0.src_1_b),               .rs2_1(decode_inst1.src_1_b),
         .rs1_0_read_port(rs1_0_read_port),          .rs1_1_read_port(rs1_1_read_port),
         .rs2_0_read_port(rs2_0_read_port),          .rs2_1_read_port(rs2_1_read_port),
 
@@ -51,41 +51,50 @@ module rename (
     //-------------------------------------------------------------
     // Renaming Function
     //-------------------------------------------------------------
-    function automatic renamed_inst_t rename_inst (
-        input decoded_inst_t d_inst,
-        input prf_read_port_t rs1_port,
-        input prf_read_port_t rs2_port,
+    function automatic instruction_t rename_inst (
+        input instruction_t d_inst,
+        input source_t rs1_port,
+        input source_t rs2_port,
         input logic [TAG_WIDTH-1:0] new_tag,
         input logic                 alloc_gnt
     );
-        renamed_inst_t r_inst;
+        instruction_t r_inst;
         r_inst = '{default:'0};
         r_inst.is_valid = alloc_gnt;
 
         // Pass-through fields from decode
         r_inst.pc           = d_inst.pc;
-        r_inst.imm          = d_inst.imm;
+        r_inst.rd           = r_inst.rd
         r_inst.has_rd       = d_inst.has_rd;
-        r_inst.is_jump      = d_inst.is_jump;
-        r_inst.is_load      = d_inst.is_load;
-        r_inst.is_store     = d_inst.is_store;
-        r_inst.is_branch    = d_inst.is_branch;
-        r_inst.is_muldiv    = d_inst.is_muldiv;
-        r_inst.alu_a_sel    = d_inst.alu_a_sel;
-        r_inst.alu_b_sel    = d_inst.alu_b_sel;
-        r_inst.uop          = d_inst.uop;
-        r_inst.uop_br       = d_inst.uop_br;
+        r_inst.br_taken     = d_inst.br_taken;
+        r_inst.opcode       = d_inst.opcode;
+        r_inst.funct7       = d_inst.funct7;
+        r_inst.uop_0        = d_inst.uop_0;
+        r_inst.uop_1        = d_inst.uop_1;
 
         // New Fields added by rename
         r_inst.dest_tag     = new_tag;
 
-        r_inst.rs1_renamed  = rs1_port.renamed;
-        r_inst.rs1_tag      = rs1_port.tag;
-        r_inst.rs1_data     = rs1_port.data;
+        if (d_inst.src_0_a.tag == d_inst.src_1_a.tag) begin
+            r_inst.src_0_a.data         = rs1_port.data;
+            r_inst.src_0_a.tag          = rs1_port.tag;
+            r_inst.src_0_a.is_renamed   = rs1_port.is_renamed;
+        end else r_inst.src_0_a.data    = d_inst.src_0_a.data; // Pass PC
 
-        r_inst.rs2_renamed  = rs2_port.renamed;
-        r_inst.rs2_tag      = rs2_port.tag;
-        r_inst.rs2_data     = rs2_port.data;
+
+        if (d_inst.src_0_b.tag == d_inst.src_1_b.tag) begin
+            r_inst.src_0_b.data         = rs2_port.data;
+            r_inst.src_0_b.tag          = rs2_port.tag;
+            r_inst.src_0_b.is_renamed   = rs2_port.is_renamed;
+        end else r_inst.src_0_b.data    = d_inst.src_0_b.data; // Pass IMM
+
+        r_inst.src_1_a.data         = rs1_port.data;
+        r_inst.src_1_a.tag          = rs1_port.tag;
+        r_inst.src_1_a.is_renamed   = rs1_port.is_renamed;
+
+        r_inst.src_1_b.data         = rs2_port.data;
+        r_inst.src_1_b.tag          = rs2_port.tag;
+        r_inst.src_1_b.is_renamed   = rs2_port.is_renamed;
 
         return r_inst;
     endfunction
@@ -93,14 +102,14 @@ module rename (
     //-------------------------------------------------------------
     // Conbinational Renaming Logic
     //-------------------------------------------------------------
-    renamed_inst_t renamed_inst0_next, renamed_inst1_next;
+    instruction_t renamed_inst0_next, renamed_inst1_next;
 
     // Request ROB entries based on validity of incoming instructions
     assign rob_alloc_req[0] = decode_inst0.is_valid;
     assign rob_alloc_req[1] = decode_inst1.is_valid;
 
     always_comb begin
-        renamed_inst_t renamed_inst0_tmp,  renamed_inst1_tmp;
+        instruction_t renamed_inst0_tmp,  renamed_inst1_tmp;
 
         // Step 1: Perform initial renaming for both instructions
         renamed_inst0_tmp = rename_inst(decode_inst0, rs1_0_read_port, rs2_0_read_port, rob_tag0, rob_alloc_gnt[0]);

@@ -11,10 +11,10 @@ module execute (
 
     // Ports from Issue
     output logic                alu_rdy0, alu_rdy1, mdu_rdy,
-    input  execute_packet_t     dmem_packet,
-    input  execute_packet_t     alu_packet0, 
-    input  execute_packet_t     alu_packet1, 
-    input  execute_packet_t     mdu_packet,
+    input  instruction_t        dmem_packet,
+    input  instruction_t        alu_packet0, 
+    input  instruction_t        alu_packet1, 
+    input  instruction_t        mdu_packet,
 
     input  logic [CPU_DATA_BITS-1:0]    dcache_dout,
     input  logic                        dcache_dout_val,

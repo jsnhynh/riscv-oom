@@ -12,7 +12,7 @@ module decode (
 
     // Ports to Rename
     input  logic            rename_rdy,
-    output decoded_inst_t   decode_inst0,   decode_inst1,
+    output instruction_t   decode_inst0,   decode_inst1,
 );
 
     //-------------------------------------------------------------
@@ -29,65 +29,71 @@ module decode (
         endcase
     endfunction
 
-    function automatic decoded_inst_t decode_inst (
+    function automatic instruction_t decode_inst (
         input logic [CPU_ADDR_BITS-1:0] pc,
         input logic [CPU_INST_BITS-1:0] inst,
         input logic                     val
     );
-        decoded_inst_t d_inst;
-        logic [6:0] opcode  = inst[6:0];
-        logic [2:0] funct3  = inst[14:12];
-        logic [6:0] funct7  = inst[31:25];
-        logic is_sub_sra    = (funct7 == FNC7_SUB_SRA);
+        logic [2:0] funct3 = inst[14:12];
+        logic [4:0] rd  = inst[11:7];
+        logic [4:0] rs1 = inst[19:15];
+        logic [4:0] rs2 = inst[24:20];
 
+        instruction_t d_inst;
         // Default values
         d_inst = '{default:'0};
+
         d_inst.pc       = pc;
-        d_inst.rd       = inst[11:7];
-        d_inst.rs1      = inst[19:15];
-        d_inst.rs2      = inst[24:20];
-        d_inst.imm      = gen_imm(inst);
+        d_inst.rd       = rd;
+
+        d_inst.uop_0    = funct3;
+        
+        d_inst.src_1_a.tag  = rs1;
+        d_inst.src_1_b.tag  = rs2;
+
+        d_inst.opcode   = inst[6:0];
+        d_inst.funct7   = inst[31:25];
 
         casez (opcode)  // Instructions are valid if sent from buffer and compliant opcode
             OPC_LUI, OPC_AUIPC, OPC_JAL, OPC_JALR, OPC_BRANCH, OPC_LOAD, OPC_STORE, OPC_ARI_ITYPE, OPC_ARI_RTYPE, OPC_CSR:
-                                d_inst.is_valid = val;
-            default:            d_inst.is_valid = '0;
+                        d_inst.is_valid = val;
+            default:    d_inst.is_valid = '0;
         endcase
         
         casez (opcode)
             OPC_LUI, OPC_AUIPC, OPC_JAL, OPC_JALR, OPC_LOAD, OPC_ARI_ITYPE, OPC_ARI_RTYPE:
-                                d_inst.has_rd = 1'b1;
-            default:            d_inst.has_rd = 1'b0;
+                        d_inst.has_rd = 1'b1;
+            default:    d_inst.has_rd = 1'b0;
         endcase
 
         casez (opcode)
-            OPC_BRANCH:         d_inst.is_branch    = 1'b1;
-            OPC_JAL, OPC_JALR:  d_inst.is_jump      = 1'b1;
-            OPC_LOAD:           d_inst.is_load      = 1'b1;
-            OPC_STORE:          d_inst.is_store     = 1'b1;
-            OPC_ARI_RTYPE:      d_inst.is_muldiv = (funct7 == FNC7_MULDIV);
-            default: ;
+            OPC_JAL, OPC_JALR: 
+                        d_inst.br_taken = 1'b1;
+            default:    d_inst.br_taken = 1'b0;
+
         endcase
 
         casez (opcode)
-            OPC_AUIPC, OPC_JAL, OPC_BRANCH: d_inst.alu_a_sel = 1'b1; // Use PC as first operand
-            default:                        d_inst.alu_a_sel = 1'b0; // Use rs1
+            OPC_AUIPC, OPC_JAL, OPC_BRANCH: 
+                        d_inst.src_0_a.data = pc;   // Use PC as first operand
+            default:    d_inst.src_0_a.tag  = rs1;  // Use rs1
         endcase
 
         casez (opcode)
-            OPC_ARI_RTYPE:      d_inst.alu_b_sel = 1'b0; // Use rs2
-            default:            d_inst.alu_b_sel = 1'b1; // Use immediate
+            OPC_ARI_RTYPE:  
+                        d_inst.src_0_b.tag  = rs2;              // Use rs2
+            default:    d_inst.src_0_b.data = gen_imm(inst);    // Use immediate
         endcase
 
         casez (opcode)
-            OPC_ARI_RTYPE, OPC_ARI_ITYPE:   d_inst.uop = {is_sub_sra, funct3};
-            OPC_LOAD, OPC_STORE:            d_inst.uop = {'0, funct3};
-            default:                        d_inst.uop = {'0, FNC_ADD_SUB};
+            OPC_ARI_RTYPE, OPC_ARI_ITYPE, OPC_LOAD, OPC_STORE:  
+                        d_inst.uop_0    = funct3;
+            default:    d_inst.uop_0    = FNC_ADD_SUB;
         endcase
 
         casez (opcode)
-            OPC_BRANCH:         d_inst.uop_br = funct3;
-            default:            d_inst.uop_br = '0;
+            OPC_BRANCH: d_inst.uop_1 = funct3;
+            default:    d_inst.uop_1 = '0;
         endcase
         
         return d_inst;
@@ -101,7 +107,7 @@ module decode (
     //-------------------------------------------------------------
     // Control Signal Generation
     //-------------------------------------------------------------
-    decoded_inst_t decode_inst0_next, decode_inst1_next;
+    instruction_t decode_inst0_next, decode_inst1_next;
 
     // Call the decoder function for each instruction path
     assign decode_inst0_next = decode_inst(inst0, inst0_pc, inst_val);

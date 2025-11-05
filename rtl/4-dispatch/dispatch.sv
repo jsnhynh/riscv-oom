@@ -19,7 +19,7 @@ import uarch_pkg::*;
 module dispatch (
     // Ports from Rename
     output logic dispatch_rdy,
-    input  renamed_inst_t renamed_inst0, renamed_inst1,
+    input  instruction_t renamed_inst0, renamed_inst1,
 
     // Ports to RS
     input  logic [1:0]      alu_rs_rdy,
@@ -30,9 +30,9 @@ module dispatch (
     output logic [1:0]      mdu_rs_we,
     output logic [1:0]      lsq_rs_we,
 
-    output renamed_inst_t   alu_rs_entry0, alu_rs_entry1,
-    output renamed_inst_t   mdu_rs_entry0, mdu_rs_entry1,
-    output renamed_inst_t   lsq_rs_entry0, lsq_rs_entry1,
+    output instruction_t   alu_rs_entry0, alu_rs_entry1,
+    output instruction_t   mdu_rs_entry0, mdu_rs_entry1,
+    output instruction_t   lsq_rs_entry0, lsq_rs_entry1,
 
     // Ports to ROB
     input  logic [1:0]      rob_rdy, // 00: 0 rdy, 01: 1 rdy, 10/11: 2+ rdy
@@ -49,12 +49,12 @@ module dispatch (
 
     // -- Step 1: Determine the target queue for each instruction --
     assign is_alu0 = renamed_inst0.is_valid && !is_mdu0 && !is_lsq0;
-    assign is_lsq0 = renamed_inst0.is_valid && renamed_inst0.is_load || renamed_inst0.is_store;
-    assign is_mdu0 = renamed_inst0.is_valid && renamed_inst0.is_muldiv;
+    assign is_lsq0 = renamed_inst0.is_valid && ((renamed_inst0.opcode == OPC_LOAD) || (renamed_inst0.opcode == OPC_STORE));
+    assign is_mdu0 = renamed_inst0.is_valid && ((renamed_inst0.opcode == OPC_ARI_RTYPE) && (renamed_inst0.funct7 == FNC7_MULDIV));
 
     assign is_alu1 = renamed_inst1.is_valid && !is_mdu1 && !is_lsq1;
-    assign is_lsq1 = renamed_inst1.is_valid && renamed_inst1.is_load || renamed_inst1.is_store;
-    assign is_mdu1 = renamed_inst1.is_valid && renamed_inst1.is_muldiv;
+    assign is_lsq1 = renamed_inst1.is_valid && ((renamed_inst0.opcode == OPC_LOAD) || (renamed_inst0.opcode == OPC_STORE));
+    assign is_mdu1 = renamed_inst1.is_valid && ((renamed_inst0.opcode == OPC_ARI_RTYPE) && (renamed_inst0.funct7 == FNC7_MULDIV));
 
     // -- Step 2: Determine if inst 0 can be dispatched -- 
     assign can_dispatch0 =  rob_rdy[0] && (
@@ -95,19 +95,17 @@ module dispatch (
     assign mdu_rs_entry1 = renamed_inst1;
 
     // ROB Entry Generation Function
-    function automatic rob_entry_t gen_rob_entry (input renamed_inst_t r_inst);
+    function automatic rob_entry_t gen_rob_entry (input instruction_t r_inst);
         rob_entry_t entry;
         entry = '{default:'0};
         entry.is_valid  = r_inst.is_valid;
         entry.is_ready  = 1'b0;
-        entry.pc        = inst.pc;
-        entry.rd        = inst.rd;
-        entry.has_rd    = inst.has_rd;
+        entry.pc        = r_inst.pc;
+        entry.rd        = r_inst.rd;
+        entry.has_rd    = r_inst.has_rd;
         // Result is undetermined
         entry.has_exception = 1'b0;
-        entry.is_branch     = inst.is_branch;
-        entry.is_jump       = inst.is_jump;
-        entry.is_store      = inst.is_store;
+        entry.opcode    = r_inst.opcode;
         return entry;
     endfunction
 

@@ -10,11 +10,11 @@ module prf (
     //-------------------------------------------------------------
     // Read Ports for Instruction 0
     input  logic [$clog2(ARCH_REGS)-1:0]    rs1_0,              rs2_0,
-    output prf_read_port_t                  rs1_0_read_port,    rs2_0_read_port,
+    output source_t                         rs1_0_read_port,    rs2_0_read_port,
 
     // Read Ports for Instruction 1
     input  logic [$clog2(ARCH_REGS)-1:0]    rs1_1,              rs2_1,
-    output prf_read_port_t                  rs1_1_read_port,    rs2_1_read_port,
+    output source_t                         rs1_1_read_port,    rs2_1_read_port,
 
     // Tag Write Ports
     input  prf_rat_write_port_t             rat_0_write_port,   rat_1_write_port,
@@ -33,10 +33,10 @@ module prf (
     //-------------------------------------------------------------
     // READ LOGIC (Asynchronous)
     //-------------------------------------------------------------
-    assign rs1_0_read_port = '{data: data_reg[rs1_0], tag: tag_reg[rs1_0], renamed: renamed_reg[rs1_0]};
-    assign rs2_0_read_port = '{data: data_reg[rs2_0], tag: tag_reg[rs2_0], renamed: renamed_reg[rs2_0]};
-    assign rs1_1_read_port = '{data: data_reg[rs1_1], tag: tag_reg[rs1_1], renamed: renamed_reg[rs1_1]};
-    assign rs2_1_read_port = '{data: data_reg[rs2_1], tag: tag_reg[rs2_1], renamed: renamed_reg[rs2_1]};
+    assign rs1_0_read_port = '{data: data_reg[rs1_0], tag: tag_reg[rs1_0], is_renamed: renamed_reg[rs1_0]};
+    assign rs2_0_read_port = '{data: data_reg[rs2_0], tag: tag_reg[rs2_0], is_renamed: renamed_reg[rs2_0]};
+    assign rs1_1_read_port = '{data: data_reg[rs1_1], tag: tag_reg[rs1_1], is_renamed: renamed_reg[rs1_1]};
+    assign rs2_1_read_port = '{data: data_reg[rs2_1], tag: tag_reg[rs2_1], is_renamed: renamed_reg[rs2_1]};
 
     //-------------------------------------------------------------
     // WRITE LOGIC (Synchronous)

@@ -19,9 +19,9 @@ module issue (
     output logic [1:0]      mdu_rs_we,
     output logic [1:0]      lsq_rs_we,
 
-    output renamed_inst_t   alu_rs_entry0, alu_rs_entry1,
-    output renamed_inst_t   mdu_rs_entry0, mdu_rs_entry1,
-    output renamed_inst_t   lsq_rs_entry0, lsq_rs_entry1,
+    output instruction_t    alu_rs_entry0, alu_rs_entry1,
+    output instruction_t    mdu_rs_entry0, mdu_rs_entry1,
+    output instruction_t    lsq_rs_entry0, lsq_rs_entry1,
 
     // Ports to Execute
     output logic [CPU_ADDR_BITS-1:0]    dcache_addr,    // Drive DMEM while also sending packet, need some module to hold packet
@@ -31,10 +31,10 @@ module issue (
     input  logic                        dcache_stall,
 
     input  logic            alu_rdy0, alu_rdy1, mdu_rdy, dmem_rdy,
-    output execute_packet_t dmem_packet,
-    output execute_packet_t alu_packet0, 
-    output execute_packet_t alu_packet1, 
-    output execute_packet_t mdu_packet
+    output instruction_t    dmem_packet,
+    output instruction_t    alu_packet0, 
+    output instruction_t    alu_packet1, 
+    output instruction_t    mdu_packet
 );
     //-------------------------------------------------------------
     //

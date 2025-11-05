@@ -26,7 +26,7 @@ module rob (
     output prf_commit_write_port_t  commit_0_write_port,    commit_1_write_port,
 
     // Ports from Dispatch
-    output  logic [1:0]             rob_rdy,
+    output logic [1:0]              rob_rdy,
     input  logic [1:0]              rob_we,
     input  rob_entry_t              rob_entry0, rob_entry1,
 
@@ -155,8 +155,8 @@ module rob (
         
         logic handshake = entry.is_ready && entry.is_valid;
         logic has_exception = handshake && entry.is_exception;
-        logic is_mispredict = handshake && (entry.is_branch && entry.result[0]);
-        logic is_jump = handshake &&  entry.is_jump;
+        logic is_mispredict = handshake && ((entry.opcode == OPC_BRANCH) && entry.result[0]);
+        logic is_jump = handshake && ((entry.opcode == OPC_JAL) || (entry.opcode == OPC_JALR));
 
         info.do_flush = has_exception || is_mispredict || is_jump;
         info.do_commmit = !has_exception && !is_mispredict; // Jumps need commit to link
@@ -164,13 +164,13 @@ module rob (
         if (info.do_commmit) begin 
             // Commit Info
             info.prf_commit.addr    = entry.rd;
-            info.prf_commit.result  = (entry.is_jump)? entry.pc+4 : entry.result;
+            info.prf_commit.result  = (is_jump)? entry.pc+4 : entry.result;
             info.prf_commit.tag     = ptr;
             info.prf_commit.we      = entry.has_rd;
 
             // LSQ Commit Info
             info.commit_store_id    = ptr;
-            info.commit_store_val   = entry.is_store;
+            info.commit_store_val   = entry.opcode == OPC_STORE;
         end
 
         if (has_exception) begin
