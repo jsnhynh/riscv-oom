@@ -11,11 +11,16 @@ module cdb (
     input  logic clk, rst, 
 
     // Ports from Execute
-    input  writeback_packet_t   alu_result0, alu_result1, mdu_result, dcache_result,
-    output logic                alu_cdb_gnt0, alu_cdb_gnt1, mdu_cdb_gnt, dcache_cdb_gnt,
+    input  writeback_packet_t   alu_result  [1:0],
+    input  writeback_packet_t   mdu_result, dmem_result,
+    output logic                alu_cdb_gnt [1:0], 
+    output logic                mdu_cdb_gnt, dmem_cdb_gnt,
 
     // Ports to ROB & Execute
-    output writeback_packet_t cdb_port0, cdb_port1
+    output writeback_packet_t   cdb_ports   [PIPE_WIDTH-1:0]
 );
+    //-------------------------------------------------------------
+    //
+    //-------------------------------------------------------------
 
 endmodule

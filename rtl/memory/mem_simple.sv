@@ -1,18 +1,12 @@
 /*
-  mem_simple_rv32i_wordhex_vivado.sv
-  ----------------------------------
-  RV32I-friendly simple memory model that works cleanly in Vivado.
-  * IMEM: read-only, WORD-PER-LINE $readmemh (32-bit per line), 1-cycle read latency
-  * DMEM: byte-addressable R/W with byte write-enables, 1-cycle read latency
-  * Parameterized sizes; no gigantic arrays derived from CPU_ADDR_BITS
-  * Correct FETCH_WIDTH lane packing (lane0=PC, lane1=PC+4, ...)
-
-  Notes:
-    - RISC-V is little-endian. Words are stored little-endian in DMEM paths.
-    - icache_stall / dcache_stall are present but ignored (simple model).
-    - Includes robust $readmemh usage + optional post-load dump to help debug hex files
-      that appear to "wrap" or truncate at certain lines.
-*/
+ * Simple Memory Model with Separate I/D Spaces
+ *
+ * This is a simulation-only module that models distinct Instruction and Data
+ * memory spaces. Each space is a byte-addressable array with 1-cycle
+ * read latency and 0-cycle (synchronous) write latency for DMEM.
+ *
+ * It supports preloading from a hex file via $readmemh for both IMEM and DMEM.
+ */
 
 module mem_simple #(
     // --- Memory sizing ---

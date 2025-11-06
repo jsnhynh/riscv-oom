@@ -10,20 +10,25 @@ module execute (
     input  logic clk, rst,
 
     // Ports from Issue
-    output logic                alu_rdy0, alu_rdy1, mdu_rdy,
-    input  instruction_t        dmem_packet,
-    input  instruction_t        alu_packet0, 
-    input  instruction_t        alu_packet1, 
-    input  instruction_t        mdu_packet,
+    output logic                        alu_rdy     [1:0], 
+    output logic                        mdu_rdy, dmem_rdy,
+    input  instruction_t                alu_packet  [1:0],
+    input  instruction_t                mdu_packet,
+    input  instruction_t                dmem_packet,
 
     input  logic [CPU_DATA_BITS-1:0]    dcache_dout,
     input  logic                        dcache_dout_val,
 
     // CDB Ports
-    output writeback_packet_t   alu_result0, alu_result1, mdu_result, dcache_result,
-    input  logic                alu_cdb_gnt0, alu_cdb_gnt1, mdu_cdb_gnt, dcache_cdb_gnt,
+    output writeback_packet_t           alu_result  [1:0],
+    output writeback_packet_t           mdu_result, dmem_result,
+    input  logic                        alu_cdb_gnt [1:0], 
+    input logic                         mdu_cdb_gnt, dmem_cdb_gnt,
 
-    input  writeback_packet_t   cdb_port0, cdb_port1    // Forward Ports
+    input  writeback_packet_t           cdb_ports   [PIPE_WIDTH-1:0]    // Forward Ports
 );
+    //-------------------------------------------------------------
+    //
+    //-------------------------------------------------------------
 
 endmodule

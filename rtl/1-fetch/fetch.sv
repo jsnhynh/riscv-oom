@@ -1,3 +1,12 @@
+/*
+ * Fetch Stage
+ *
+ * This module implements the first stage of the pipeline. It is responsible
+ * for PC generation, handling sequential increments (PC+8) and redirects
+ * from the ROB (on flush/mispredict). It issues read requests to the
+ * I-Cache and passes the fetched instruction packet to the Instruction Buffer.
+ */
+
 import riscv_isa_pkg::*;
 import uarch_pkg::*;
 
@@ -5,8 +14,8 @@ module fetch (
     input  logic clk, rst, flush, icache_stall,
 
     // Ports from ROB
-    input  logic [2:0]                   pc_sel,
-    input  logic [CPU_ADDR_BITS-1:0]     rob_pc,
+    input  logic [2:0]                  pc_sel,
+    input  logic [CPU_ADDR_BITS-1:0]    rob_pc,
     
     // IMEM Ports
     output logic [CPU_ADDR_BITS-1:0]    icache_addr,
@@ -16,8 +25,8 @@ module fetch (
 
     // Ports to Decoder
     input  logic                        decoder_rdy,
-    output logic [CPU_ADDR_BITS-1:0]    inst0_pc,     inst1_pc,
-    output logic [CPU_INST_BITS-1:0]    inst0,  inst1,
+    output logic [CPU_ADDR_BITS-1:0]    inst_pcs    [PIPE_WIDTH-1:0],
+    output logic [CPU_INST_BITS-1:0]    insts       [PIPE_WIDTH-1:0],
     output logic                        inst_val
 );
 
@@ -43,10 +52,8 @@ module fetch (
         .inst_buffer_rdy(inst_buffer_rdy),
         
         .decoder_rdy(decoder_rdy),
-        .inst0_pc(inst0_pc),
-        .inst1_pc(inst1_pc),
-        .inst0(inst0),
-        .inst1(inst1),
+        .inst_pcs(inst_pcs),
+        .insts(insts),
         .inst_val(inst_val)
     );
 

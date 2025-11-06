@@ -30,30 +30,32 @@ module core (
     // Wires
     //-------------------------------------------------------------
     logic flush;
-    logic pc_sel;
-    logic rob_pc;
+    logic [2:0] pc_sel;
+    logic [CPU_ADDR_BITS-1:0] rob_pc;
 
     logic decoder_rdy;
-    logic inst0_pc, inst0_pc;
-    logic inst0, inst1;
+    logic [CPU_ADDR_BITS-1:0] inst0_pc, inst0_pc;
+    logic [CPU_INST_BITS-1:0] inst0, inst1;
     logic inst_val;
 
     logic rename_rdy;
-    logic decode_inst0, decode_inst1;
+    instruction_t decode_inst0, decode_inst1;
 
     logic dispatch_rdy;
-    logic renamed_inst0, renamed_inst1;
+    instruction_t renamed_inst0, renamed_inst1;
 
-    logic alu_rs_rdy, alu_rs_we;
-    logic lsq_rs_rdy, lsq_rs_we;
-    logic mdu_rs_rdy, mdu_rs_we;
+    logic [1:0] alu_rs_rdy, alu_rs_we;
+    logic [1:0] lsq_rs_rdy, lsq_rs_we;
+    logic [1:0] mdu_rs_rdy, mdu_rs_we;
 
-    logic rob_alloc_req, rob_alloc_gnt;
-    logic rob_tag0, rob_tag1;
-    logic commit_0_write_port, commit_1_write_port;
+    logic [1:0] rob_alloc_req, rob_alloc_gnt;
+    logic [TAG_WIDTH-1:0] rob_tag0, rob_tag1;
+    prf_commit_write_port_t commit_0_write_port, commit_1_write_port;
 
-    logic rob_rdy, rob_we;
-    logic rob_entry0, rob_entry1;
+    logic [1:0] rob_rdy, rob_we;
+    rob_entry_t rob_entry0, rob_entry1;
+
+    logic [TAG_WIDTH-1:0] 
 
     //-------------------------------------------------------------
     // 1-Fetch
@@ -194,6 +196,8 @@ module core (
         // Ports to LSQ
         .commit_store_id0(commit_store_id0),
         .commit_store_id1(commit_store_id1),
+        .commit_store_val0(commit_store_val0),
+        .commit_store_val1(commit_store_val1),
         // ROB Pointers
         .rob_head(rob_head),
         .rob_tail(rob_tail)

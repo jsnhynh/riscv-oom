@@ -24,10 +24,8 @@ module fetch_tb;
 
     // Decoder Ports
     logic                       decoder_rdy_i;
-    logic [CPU_ADDR_BITS-1:0]   inst0_pc_o;
-    logic [CPU_ADDR_BITS-1:0]   inst1_pc_o;
-    logic [CPU_INST_BITS-1:0]   inst0_o;
-    logic [CPU_INST_BITS-1:0]   inst1_o;
+    logic [CPU_ADDR_BITS-1:0]   inst_pcs_o  [PIPE_WIDTH-1:0];
+    logic [CPU_INST_BITS-1:0]   insts_o     [PIPE_WIDTH-1:0];
     logic                       inst_val_o;
 
     fetch dut (
@@ -45,10 +43,8 @@ module fetch_tb;
         .icache_stall(icache_stall_i),
 
         .decoder_rdy(decoder_rdy_i),
-        .inst0_pc(inst0_pc_o),
-        .inst1_pc(inst1_pc_o),
-        .inst0(inst0_o),
-        .inst1(inst1_o),
+        .inst_pcs(inst_pcs_o),
+        .insts(insts_o),
         .inst_val(inst_val_o)
     );
 
@@ -106,7 +102,7 @@ module fetch_tb;
         repeat (3) begin
             @(posedge clk); // Hold stall
             $display("OUT: PC:%h Inst0:%h | PC4:%h Inst1:%h | Inst Val:%b | ***STALLED",
-            inst0_pc_o, inst0_o, inst1_pc_o, inst1_o, inst_val_o);
+            inst_pcs_o[0], insts_o[0], inst_pcs_o[1], insts_o[1], inst_val_o);
         end        decoder_rdy_i = 1; // Release stall
         repeat (2) @(posedge clk);    // Allow recovery
 
@@ -116,7 +112,7 @@ module fetch_tb;
         repeat (5) begin
             @(posedge clk); // Hold stall
             $display("OUT: PC:%h Inst0:%h | PC4:%h Inst1:%h | Inst Val:%b | ***STALLED",
-            inst0_pc_o, inst0_o, inst1_pc_o, inst1_o, inst_val_o);
+            inst_pcs_o[0], insts_o[0], inst_pcs_o[1], insts_o[1], inst_val_o);
         end
         icache_stall_i = 0; // Release stall
         repeat (3) @(posedge clk);     // Allow recovery
@@ -130,7 +126,7 @@ module fetch_tb;
         flush_i = 0;        // De-assert flush for next cycle fetch
         pc_sel_i = '0;
         repeat(2) @(posedge clk);     // PC updates, new fetch issued to 0004
-        assert (inst0_pc_o == 32'h0000_0004) else $fatal(1, "[%0t] Redirect failed. Addr=%h", $time, icache_addr);
+        assert (inst_pcs_o[0] == 32'h0000_0004) else $fatal(1, "[%0t] Redirect failed. Addr=%h", $time, icache_addr);
         repeat (5) @(posedge clk);
         
 
@@ -145,7 +141,7 @@ module fetch_tb;
         $monitor ("IN: flush:%b | stall:%b | decode_rdy:%b",
             flush_i, icache_stall_i, decoder_rdy_i);
         $monitor("OUT: PC:%h Inst0:%h | PC4:%h Inst1:%h | Inst Val:%b | IB_EMPTY:%d",
-            inst0_pc_o, inst0_o, inst1_pc_o, inst1_o, inst_val_o, dut.ib.is_empty);
+            inst_pcs_o[0], insts_o[0], inst_pcs_o[1], insts_o[1], inst_val_o, dut.ib.is_empty);
 
     end
 

@@ -1,3 +1,13 @@
+/* 
+ * Decode Stage
+ *
+ * This module decodes two RISC-V instructions in parallel. It parses the
+ * raw instruction bits from the instruction buffer, generates immediate
+ * values, and creates all necessary control signals for the backend. It 
+ * bundles this information into the instruction_t struct for the Rename 
+ * stage.
+ */
+
 import riscv_isa_pkg::*;
 import uarch_pkg::*;
 
@@ -6,13 +16,13 @@ module decode (
 
     // Ports from Fetch
     output logic                        decode_rdy,
-    input  logic [CPU_ADDR_BITS-1:0]    inst0_pc,   inst1_pc,
-    input  logic [CPU_INST_BITS-1:0]    inst0,      inst1,
+    input  logic [CPU_ADDR_BITS-1:0]    inst_pcs    [PIPE_WIDTH-1:0],
+    input  logic [CPU_INST_BITS-1:0]    insts       [PIPE_WIDTH-1:0],
     input  logic                        inst_val,
 
     // Ports to Rename
     input  logic            rename_rdy,
-    output instruction_t   decode_inst0,   decode_inst1,
+    output instruction_t    decoded_insts [PIPE_WIDTH-1:0]
 );
 
     //-------------------------------------------------------------
@@ -107,26 +117,26 @@ module decode (
     //-------------------------------------------------------------
     // Control Signal Generation
     //-------------------------------------------------------------
-    instruction_t decode_inst0_next, decode_inst1_next;
+    instruction_t decoded_insts_next [PIPE_WIDTH-1:0];
 
     // Call the decoder function for each instruction path
-    assign decode_inst0_next = decode_inst(inst0, inst0_pc, inst_val);
-    assign decode_inst1_next = decode_inst(inst1, inst1_pc, inst_val);
+    assign decoded_insts_next[0] = decode_inst(insts[0], inst_pcs[0], inst_val);
+    assign decoded_insts_next[1] = decode_inst(insts[1], inst_pcs[1], inst_val);
     
     //-------------------------------------------------------------
     // Pipeline Register Logic
     //-------------------------------------------------------------
     always_ff @(posedge clk) begin
         if (rst || flush) begin
-            decode_inst0 <= '{default:'0};
-            decode_inst1 <= '{default:'0};
+            decoded_insts[0] <= '{default:'0};
+            decoded_insts[1] <= '{default:'0};
         end else if (decode_rdy) begin
             if (inst_val) begin
-                decode_inst0 <= decode_inst0_next;
-                decode_inst1 <= decode_inst1_next;
+                decoded_insts[0] <= decoded_insts_next[0];
+                decoded_insts[1] <= decode_inst1_next;
             end else begin
-                decode_inst0 <= '{default:'0};
-                decode_inst1 <= '{default:'0};
+                decoded_insts[0] <= '{default:'0};
+                decoded_insts[1] <= '{default:'0};
             end
         end
     end

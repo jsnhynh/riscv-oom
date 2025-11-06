@@ -1,11 +1,12 @@
 /*
-    This package defines all the structed types and parameters
-    used to pass information between the stages of the dual-issue, 
-    out-of-order RISC-V core.
-
-    By centralizing these definitions, we create a single source of
-    truth for all module interfaces.
-*/
+ * Microarchitectural Types Package
+ *
+ * This package defines the internal, implementation-specific parameters and
+ * data structures (structs) for this specific out-of-order processor.
+ * It includes the definitions for pipeline-stage interfaces (e.g.,
+ * decoded_inst_t, renamed_inst_t), ROB/RS/LSQ sizing parameters,
+ * and PRF port types.
+ */
 
 package uarch_pkg;
     import riscv_isa_pkg::*;
@@ -15,7 +16,8 @@ package uarch_pkg;
     //-------------------------------------------------------------
     // These are the "knobs" to configure the size and performance of your core.
     localparam CLK_PERIOD       = 10;       // 10ns = 100MHz clock
-    localparam FETCH_WIDTH      = 2;        // Number of instructions per fetch  
+    localparam FETCH_WIDTH      = 2;        // Number of instructions per fetch
+    localparam PIPE_WIDTH       = 2;        // Number of instructions processed
 
     localparam ROB_ENTRIES      = 32;
     localparam ALU_RS_ENTRIES   = 8;
@@ -29,33 +31,33 @@ package uarch_pkg;
         The following structs is used to pass decoded instructions down the pipeline to the FU
     */
     typedef struct packed {
-        logic [CPU_DATA_BITS-1:0]   data,       // Reference if is_renamed == 1, else snoop CDB with tag
-        logic [TAG_WIDTH-1:0]       tag,        // is_renamed? renamed_tag / reg_addr
-        logic                       is_renamed
+        logic [CPU_DATA_BITS-1:0]   data;       // Reference if is_renamed == 1, else snoop CDB with tag
+        logic [TAG_WIDTH-1:0]       tag;        // is_renamed? renamed_tag / reg_addr
+        logic                       is_renamed;
     } source_t;
 
     typedef struct packed {
-        logic [CPU_ADDR_BITS-1:0] pc,
-        logic [4:0] rd,
-        logic [TAG_WIDTH-1:0] dest_tag,
+        logic [CPU_ADDR_BITS-1:0] pc;
+        logic [4:0] rd;
+        logic [TAG_WIDTH-1:0] dest_tag;
 
         /* 2 Sources + Operation */
-        source_t    src_0_a,    // a_sel? PC  : RS1
-        source_t    src_0_b,    // b_sel? IMM : RS2
-        logic [2:0] uop_0,      // Func3, replace with ADD for address generation
+        source_t    src_0_a;    // a_sel? PC  : RS1
+        source_t    src_0_b;    // b_sel? IMM : RS2
+        logic [2:0] uop_0;      // Func3, replace with ADD for address generation
 
         /* 2 Sources + Operation, used for parallel operations/additional data ie:BRANCHES/STORE*/
-        source_t    src_1_a,    // Always RS1 (For Branches)
-        source_t    src_1_b,    // Always RS2 (For Branches/Store_Data)
-        logic [2:0] uop_1,      // Func3, Used for Branch Operation, use ADD for uop_0
+        source_t    src_1_a;    // Always RS1 (For Branches)
+        source_t    src_1_b;    // Always RS2 (For Branches/Store_Data)
+        logic [2:0] uop_1;      // Func3, Used for Branch Operation, use ADD for uop_0
 
         // Control Signals
-        logic is_valid,
-        logic has_rd,
-        logic br_taken,         // Set to 1 if jump, can be later used for Branch Prediction
-        logic [6:0] opcode,
-        logic [6:0] funct7
-    } instruction_t
+        logic is_valid;
+        logic has_rd;
+        logic br_taken;         // Set to 1 if jump, can be later used for Branch Prediction
+        logic [6:0] opcode;
+        logic [6:0] funct7;
+    } instruction_t;
 
     //-------------------------------------------------------------
     // Execute Stage -> Writeback Stage Interface (The CDB)
@@ -87,7 +89,7 @@ package uarch_pkg;
         logic                       has_exception;
 
         // Control Flow Information
-        logic [6:0]                 opcode
+        logic [6:0]                 opcode;
     } rob_entry_t;
 
     //-------------------------------------------------------------

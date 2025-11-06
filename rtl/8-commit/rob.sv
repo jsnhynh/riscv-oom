@@ -1,10 +1,15 @@
 /*
-    Commit Stage
-
-    This module contains the ROB, which allocates and renamed 
-    instructions and commits instructions in order. It also 
-    communicates with the LSQ to decide valid stores.
-*/
+ * Commit Reorder Buffer (ROB)
+ *
+ * This module is the central controller for the out-of-order backend. It
+ * is a circular buffer that tracks all in-flight instructions.
+ *
+ * Its primary responsibilities are:
+ * 1. Allocation: Grants tags to the Rename stage.
+ * 2. Writeback: Snoops the CDBs and updates entries with results.
+ * 3. Commit: Commits up to two instructions in-order, writing to the PRF.
+ * 4. Recovery: Detects mispredictions/exceptions at commit and flushes the pipeline.
+ */
 
 import riscv_isa_pkg::*;
 import uarch_pkg::*;
@@ -18,24 +23,24 @@ module rob (
     output logic [CPU_ADDR_BITS-1:0] rob_pc,
 
     // Ports to Rename (Allocation)
-    input  logic [1:0]              rob_alloc_req,
-    output logic [1:0]              rob_alloc_gnt, // Grant for 0, 1, or 2 entries
-    output logic [TAG_WIDTH-1:0]    rob_tag0,               rob_tag1,
+    input  logic [PIPE_WIDTH-1:0]   rob_alloc_req,
+    output logic [PIPE_WIDTH-1:0]   rob_alloc_gnt, // Grant for 0, 1, or 2 entries
+    output logic [TAG_WIDTH-1:0]    rob_tags            [PIPE_WIDTH-1:0],
     
     // Ports to Rename (Commit)
-    output prf_commit_write_port_t  commit_0_write_port,    commit_1_write_port,
+    output prf_commit_write_port_t  commit_write_ports  [PIPE_WIDTH-1:0],
 
     // Ports from Dispatch
-    output logic [1:0]              rob_rdy,
-    input  logic [1:0]              rob_we,
-    input  rob_entry_t              rob_entry0, rob_entry1,
+    output logic [PIPE_WIDTH-1:0]   rob_rdy,
+    input  logic [PIPE_WIDTH-1:0]   rob_we,
+    input  rob_entry_t              rob_entries         [PIPE_WIDTH-1:0],
 
     // Ports from CDB
-    input  writeback_packet_t       cdb_port0, cdb_port1,
+    input  writeback_packet_t       cdb_ports           [PIPE_WIDTH-1:0],
 
     // Ports to LSQ
-    output logic [TAG_WIDTH-1:0]    commit_store_id0,   commit_store_id1,
-    output logic                    commit_store_val0,  commit_store_val1,
+    output logic [TAG_WIDTH-1:0]    commit_store_id     [PIPE_WIDTH-1:0],
+    output logic                    commit_store_vals   [PIPE_WIDTH-1:0],
 
     // ROB Pointers
     output logic [TAG_WIDTH-1:0]    rob_head, rob_tail 
@@ -81,8 +86,8 @@ module rob (
     end
     assign rob_rdy[0] = (avail_slots >= 1);
     assign rob_rdy[1] = (avail_slots >= 2);
-    assign rob_tag0 = tail[PTR_WIDTH-1:0];
-    assign rob_tag1 = tail1[PTR_WIDTH-1:0];
+    assign rob_tags[0] = tail[PTR_WIDTH-1:0];
+    assign rob_tags[1] = tail1[PTR_WIDTH-1:0];
     assign rob_head = head[PTR_WIDTH-1:0];
     assign rob_tail = tail[PTR_WIDTH-1:0];
 
@@ -93,8 +98,8 @@ module rob (
         if (rst || flush) begin
             for (int i = 0; i < ROB_ENTRIES; i++) rob_entries[i].is_valid <= 1'b0;
         end else begin
-            if (rob_we[0]) rob_entries[rob_tag0] <= rob_entry0;
-            if (rob_we[1]) rob_entries[rob_tag1] <= rob_entry1;
+            if (rob_we[0]) rob_entries[rob_tags[0]] <= rob_entries[0];
+            if (rob_we[1]) rob_entries[rob_tags[1]] <= rob_entries[1];
         end
     end
 
@@ -118,8 +123,8 @@ module rob (
     always_comb begin
         rob_entry_t entry_after_cdb0;
         for (int i = 0; i < ROB_ENTRIES; i++) begin
-            entry_after_cdb0    = cdb_snoop(rob_entries[i], cdb_port0, i[TAG_WIDTH-1:0]);
-            rob_entries_next[i] = cdb_snoop(entry_after_cdb0, cdb_port1, i[TAG_WIDTH-1:0]);
+            entry_after_cdb0    = cdb_snoop(rob_entries[i], cdb_ports[0], i[TAG_WIDTH-1:0]);
+            rob_entries_next[i] = cdb_snoop(entry_after_cdb0, cdb_ports[1], i[TAG_WIDTH-1:0]);
         end
     end
     
@@ -182,42 +187,39 @@ module rob (
         return info;
     endfunction
 
-    commit_info_t commit0_info, commit1_info;
+    commit_info_t commit_info [PIPE_WIDTH-1:0];
 
-    assign commit0_info = proc_commit(head[PTR_WIDTH-1:0]);
+    assign commit_info[0] = proc_commit(head[PTR_WIDTH-1:0]);
     // Only process second candidate if first doesnt flush
-    assign commit1_info = commit0_info.do_flush? '{default:'0} : proc_commit(head1[PTR_WIDTH-1:0]);
+    assign commit_info[1] = commit_info[0].do_flush? '{default:'0} : proc_commit(head1[PTR_WIDTH-1:0]);
 
     always_comb begin
         rob_pc  = '0;
         flush   = 1'b0;
-        commit_0_write_port = '{default:'0};
-        commit_1_write_port = '{default:'0};
-        commit_store_id0    = '0;
-        commit_store_id1    = '0;
-        commit_store_val0   = 1'b0;
-        commit_store_val1   = 1'b0;
+        commit_write_ports  = '{default:'0};
+        commit_store_ids    = '{default:'0};
+        commit_store_vals   = '{default:'0}
         commit_cnt          = '0;
 
-        if (commit0_info.do_flush) begin
-            rob_pc  = commit0_info.redirect_pc;
+        if (commit_info[0].do_flush) begin
+            rob_pc  = commit_info[0].redirect_pc;
             flush   = 1'b1;
-        end else if (commit1_info.do_flush) begin
-            rob_pc  = commit1_info.redirect_pc;
+        end else if (commit_info[1].do_flush) begin
+            rob_pc  = commit_info[1].redirect_pc;
             flush   = 1'b1;
         end
 
-        if (commit0_info.do_commmit) begin
+        if (commit_info[0].do_commmit) begin
             commit_cnt = 2'd1;
-            commit_0_write_port = commit0_info.prf_commit;
-            commit_store_id0    = commit0_info.commit_store_id;
-            commit_store_val0   = commit0_info.commit_store_val;
+            commit_write_ports[0]   = commit_info[0].prf_commit;
+            commit_store_ids[0]     = commit_info[0].commit_store_id;
+            commit_store_vals[0]    = commit_info[0].commit_store_val;
         end
-        if (commit1_info.do_commmit) begin
+        if (commit_info[1].do_commmit) begin
             commit_cnt = 2'd2;
-            commit_1_write_port = commit1_info.prf_commit;
-            commit_store_id1    = commit1_info.commit_store_id;
-            commit_store_val1   = commit1_info.commit_store_val;
+            commit_write_ports[1]   = commit_info[1].prf_commit;
+            commit_store_ids[1]     = commit_info[1].commit_store_id;
+            commit_store_vals[1]    = commit_info[1].commit_store_val;
         end
     end
 

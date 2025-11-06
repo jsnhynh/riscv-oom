@@ -1,8 +1,11 @@
 /*
-    This package defines the standard, unchanging architectural 
-    constants for the RV32IM instruction set, including opcodes 
-    and fuction fields.
-*/
+ * RISC-V ISA Definitions Package
+ *
+ * This package defines the standard, unchanging architectural constants for the
+ * RV32IM instruction set. This includes opcodes, function fields (funct3/funct7),
+ * architectural parameters (PC_RESET, CPU_DATA_BITS, ARCH_REGS), and other
+ * ISA-level definitions.
+ */
 
 package riscv_isa_pkg;
     //-------------------------------------------------------------

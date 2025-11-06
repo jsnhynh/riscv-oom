@@ -1,3 +1,12 @@
+/*
+ * Instruction Buffer (FIFO Queue)
+ *
+ * This module acts as a decoupling buffer between the Fetch and Decode stages.
+ * It is implemented as a circular FIFO to help hide I-Cache read latency
+ * and to smooth the instruction stream, preventing pipeline stalls from
+ * propagating upstream to the PC generation logic.
+ */
+
 import riscv_isa_pkg::*;
 import uarch_pkg::*;
 
@@ -6,22 +15,22 @@ module inst_buffer (
   input logic clk, rst, flush,
 
   // Port from ICache
-  input  logic [CPU_ADDR_BITS-1:0]    pc,
+  input  logic [CPU_ADDR_BITS-1:0]      pc,
   input  logic [FETCH_WIDTH*CPU_INST_BITS-1:0]  icache_dout,
-  input  logic                        icache_dout_val,
-  output logic                        inst_buffer_rdy,
+  input  logic                          icache_dout_val,
+  output logic                          inst_buffer_rdy,
 
   // Port to Decoder
   input  logic decoder_rdy,
-  output logic [CPU_ADDR_BITS-1:0]  inst0_pc, inst1_pc,
-  output logic [CPU_INST_BITS-1:0]  inst0,    inst1,
-  output logic                      inst_val
+  output logic [CPU_ADDR_BITS-1:0]      inst_pcs        [PIPE_WIDTH-1:0],
+  output logic [CPU_INST_BITS-1:0]      insts           [PIPE_WIDTH-1:0],
+  output logic                          inst_val
 );
   logic [$clog2(INST_BUFFER_DEPTH)-1:0] read_ptr, write_ptr;
   logic is_full, is_empty;
 
-  logic [CPU_ADDR_BITS-1:0]    pc_regs         [INST_BUFFER_DEPTH-1:0];
-  logic [2*CPU_INST_BITS-1:0]  inst_packet_reg [INST_BUFFER_DEPTH-1:0];
+  logic [CPU_ADDR_BITS-1:0]             pc_regs         [INST_BUFFER_DEPTH-1:0];
+  logic [FETCH_WIDTH*CPU_INST_BITS-1:0] inst_packet_reg [INST_BUFFER_DEPTH-1:0];
 
   logic do_write, do_read;
   assign do_write = icache_dout_val && inst_buffer_rdy && ~flush;
@@ -55,8 +64,8 @@ module inst_buffer (
   // Read
   logic [2*CPU_INST_BITS-1:0] read_packet;
   assign read_packet = inst_packet_reg[read_ptr];
-  assign inst0    = (inst_val)? read_packet[CPU_INST_BITS-1:0] : '0;
-  assign inst1    = (inst_val)? read_packet[FETCH_WIDTH*CPU_INST_BITS-1:CPU_INST_BITS] : '0;
-  assign inst0_pc = (inst_val)? pc_regs[read_ptr] : '0;
-  assign inst1_pc = (inst_val)? pc_regs[read_ptr] + 4 : '0;
+  assign insts[0]    = (inst_val)? read_packet[CPU_INST_BITS-1:0] : '0;
+  assign insts[1]    = (inst_val)? read_packet[FETCH_WIDTH*CPU_INST_BITS-1:CPU_INST_BITS] : '0;
+  assign inst_pcs[0] = (inst_val)? pc_regs[read_ptr] : '0;
+  assign inst_pcs[1] = (inst_val)? pc_regs[read_ptr] + 4 : '0;
 endmodule
