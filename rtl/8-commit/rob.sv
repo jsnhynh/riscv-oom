@@ -39,8 +39,8 @@ module rob (
     input  writeback_packet_t       cdb_ports           [PIPE_WIDTH-1:0],
 
     // Ports to LSQ
-    output logic [TAG_WIDTH-1:0]    commit_store_id     [PIPE_WIDTH-1:0],
-    output logic                    commit_store_vals   [PIPE_WIDTH-1:0],
+    output logic [TAG_WIDTH-1:0]    commit_store_ids    [PIPE_WIDTH-1:0],
+    output logic [PIPE_WIDTH-1:0]   commit_store_vals,
 
     // ROB Pointers
     output logic [TAG_WIDTH-1:0]    rob_head, rob_tail 

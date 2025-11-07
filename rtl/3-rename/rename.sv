@@ -22,7 +22,6 @@ module rename (
     // Ports to Dispatch
     input  logic                    dispatch_rdy,
     output instruction_t            renamed_insts       [PIPE_WIDTH-1:0],
-    output logic                    rename_val,
 
     // Ports from ROB
     output logic [PIPE_WIDTH-1:0]   rob_alloc_req,
@@ -107,27 +106,35 @@ module rename (
     // Conbinational Renaming Logic
     //-------------------------------------------------------------
     instruction_t renamed_insts_next [PIPE_WIDTH-1:0];
+    logic [PIPE_WIDTH-1:0] alloc_ok;
 
     // Request ROB entries based on validity of incoming instructions
     assign rob_alloc_req[0] = decoded_insts[0].is_valid;
     assign rob_alloc_req[1] = decoded_insts[1].is_valid;
 
+    assign alloc_ok[0] = !decoded_insts[0].is_valid || (decoded_insts[0].is_valid && rob_alloc_gnt[0]);
+    assign alloc_ok[1] = !decoded_insts[1].is_valid || (decoded_insts[1].is_valid && rob_alloc_gnt[1]);
+
     always_comb begin
         instruction_t renamed_insts_tmp [PIPE_WIDTH-1:0];
+        logic [PIPE_WIDTH-1:0] can_rename;
+
+        can_rename[0] = decoded_insts[0].is_valid && rob_alloc_gnt[0];
+        can_rename[1] = decoded_insts[1].is_valid && rob_alloc_gnt[1];
 
         // Step 1: Perform initial renaming for both instructions
-        renamed_insts_tmp[0] = rename_inst(decoded_insts[0], rs1_read_ports[0], rs2_read_ports[0], rob_tags[0], rob_alloc_gnt[0]);
-        renamed_insts_tmp[1] = rename_inst(decoded_insts[1], rs1_read_ports[1], rs2_read_ports[1], rob_tags[1], rob_alloc_gnt[1]);
+        renamed_insts_tmp[0] = rename_inst(decoded_insts[0], rs1_read_ports[0], rs2_read_ports[0], rob_tags[0], can_rename[0]);
+        renamed_insts_tmp[1] = rename_inst(decoded_insts[1], rs1_read_ports[1], rs2_read_ports[1], rob_tags[1], can_rename[1]);
 
         // Step 2: Apply intra-group forwards logic for inst 1
-        if (rob_alloc_gnt[0] && decoded_insts[0].has_rd && (decoded_insts[1].rs1 == decoded_insts[0].rd) && (decoded_insts[0].rd != 0)) begin //  inst0's rd == inst1's rs1?
-            renamed_insts_tmp[1].rs1_renamed   = 1'b1;
-            renamed_insts_tmp[1].rs1_tag       = rob_tag0;
+        if (can_rename[0] && decoded_insts[0].has_rd && (decoded_insts[1].src_1_a == decoded_insts[0].rd) && (decoded_insts[0].rd != 0)) begin //  inst0's rd == inst1's rs1?
+            renamed_insts_tmp[1].src_1_a.is_renamed = 1'b1;
+            renamed_insts_tmp[1].src_1_a.tag       = rob_tags[0];
         end
 
-        if (rob_alloc_gnt[0] && decoded_insts[0].has_rd && (decoded_insts[1].rs2 == decoded_insts[0].rd) && (decoded_insts[0].rd != 0)) begin //  inst0's rd == inst1's rs2?
-            renamed_insts_tmp[1].rs2_renamed   = 1'b1;
-            renamed_insts_tmp[1].rs2_tag       = rob_tag0;
+        if (can_rename[0] && decoded_insts[0].has_rd && (decoded_insts[1].src_1_b == decoded_insts[0].rd) && (decoded_insts[0].rd != 0)) begin //  inst0's rd == inst1's rs2?
+            renamed_insts_tmp[1].src_1_b.is_renamed = 1'b1;
+            renamed_insts_tmp[1].src_1_b.tag        = rob_tags[0];
         end
 
         // Step 3: Compaction Logic
@@ -142,19 +149,19 @@ module rename (
 
     // -- Generate Write Ports for PRF --
     assign rat_write_ports[0].addr = decoded_insts[0].rd;
-    assign rat_write_ports[0].tag  = rob_tag0;
-    assign rat_write_ports[0].we   = rob_alloc_gnt[0] && decoded_insts[0].has_rd;
+    assign rat_write_ports[0].tag  = rob_tags[0];
+    assign rat_write_ports[0].we   = decoded_inst[0].is_valid && rob_alloc_gnt[0] && decoded_insts[0].has_rd;
 
     assign rat_write_ports[1].addr = decoded_insts[1].rd;
-    assign rat_write_ports[1].tag  = rob_tag1;
-    assign rat_write_ports[1].we   = rob_alloc_gnt[1] && decoded_insts[1].has_rd;
+    assign rat_write_ports[1].tag  = rob_tag[1];
+    assign rat_write_ports[1].we   = decoded_inst[1].is_valid && rob_alloc_gnt[1] && decoded_insts[1].has_rd;
 
     //-------------------------------------------------------------
     // Handshake and Pipeline Control
     //-------------------------------------------------------------
-    logic can_advance = ~decoded_insts[0].is_valid || (decoded_insts[0].is_valid && rob_alloc_gnt[0]);
+    logic can_advance = alloc_ok&;
     assign rename_rdy = dispatch_rdy && can_advance;
-    assign rename_val = rob_alloc_gnt[0] || rob_alloc_gnt[1];
+    assign rename_val = renamed_insts_next[0] || renamed_insts_next[1];
 
     //-------------------------------------------------------------
     // Pipeline Register Logic

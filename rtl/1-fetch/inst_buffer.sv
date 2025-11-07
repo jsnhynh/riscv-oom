@@ -24,7 +24,7 @@ module inst_buffer (
   input  logic decoder_rdy,
   output logic [CPU_ADDR_BITS-1:0]      inst_pcs        [PIPE_WIDTH-1:0],
   output logic [CPU_INST_BITS-1:0]      insts           [PIPE_WIDTH-1:0],
-  output logic                          inst_val
+  output logic                          fetch_val
 );
   logic [$clog2(INST_BUFFER_DEPTH)-1:0] read_ptr, write_ptr;
   logic is_full, is_empty;
@@ -59,13 +59,13 @@ module inst_buffer (
   assign is_empty = (read_ptr == write_ptr);
 
   assign inst_buffer_rdy  = ~is_full;
-  assign inst_val         = ~is_empty && ~rst && ~flush && decoder_rdy;
+  assign fetch_val         = ~is_empty && ~rst && ~flush && decoder_rdy;
 
   // Read
   logic [2*CPU_INST_BITS-1:0] read_packet;
   assign read_packet = inst_packet_reg[read_ptr];
-  assign insts[0]    = (inst_val)? read_packet[CPU_INST_BITS-1:0] : '0;
-  assign insts[1]    = (inst_val)? read_packet[FETCH_WIDTH*CPU_INST_BITS-1:CPU_INST_BITS] : '0;
-  assign inst_pcs[0] = (inst_val)? pc_regs[read_ptr] : '0;
-  assign inst_pcs[1] = (inst_val)? pc_regs[read_ptr] + 4 : '0;
+  assign insts[0]    = (fetch_val)? read_packet[CPU_INST_BITS-1:0] : '0;
+  assign insts[1]    = (fetch_val)? read_packet[FETCH_WIDTH*CPU_INST_BITS-1:CPU_INST_BITS] : '0;
+  assign inst_pcs[0] = (fetch_val)? pc_regs[read_ptr] : '0;
+  assign inst_pcs[1] = (fetch_val)? pc_regs[read_ptr] + 4 : '0;
 endmodule

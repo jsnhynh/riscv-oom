@@ -27,7 +27,7 @@ module fetch (
     input  logic                        decoder_rdy,
     output logic [CPU_ADDR_BITS-1:0]    inst_pcs    [PIPE_WIDTH-1:0],
     output logic [CPU_INST_BITS-1:0]    insts       [PIPE_WIDTH-1:0],
-    output logic                        inst_val
+    output logic                        fetch_val
 );
 
     logic [CPU_ADDR_BITS-1:0] pc, pc_next;
@@ -54,7 +54,7 @@ module fetch (
         .decoder_rdy(decoder_rdy),
         .inst_pcs(inst_pcs),
         .insts(insts),
-        .inst_val(inst_val)
+        .fetch_val(fetch_val)
     );
 
     always_comb begin
