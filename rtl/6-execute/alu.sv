@@ -12,14 +12,14 @@ module alu (
 );
     instruction_t alu_packet_q;
     writeback_packet_t alu_result_d;
-    REGISTER_R_CE #(.N()) alu_packet_reg_i (
+    REGISTER_R_CE #(.N($bits(instruction_t))) alu_packet_reg_i (
         .q(alu_packet_q),
         .d(alu_packet),
         .clk(clk),
         .rst(rst || flush),
         .ce(!alu_rdy),
     );
-    REGISTER_R_CE #(.N()) alu_result_reg_o (
+    REGISTER_R_CE #(.N($bits(writeback_packet_t))) alu_result_reg_o (
         .q(alu_packet),
         .d(alu_result_d),
         .clk(clk),
