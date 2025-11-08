@@ -27,10 +27,10 @@ module alu (
         .ce(!alu_rdy);
     );
 
-    logic [CPU_DATA_BITS-1:0] a = alu_packet_q.src_0_a;
-    logic [CPU_DATA_BITS-1:0] b = alu_packet_q.src_0_b;
-    logic [CPU_DATA_BITS-1:0] rs1 = alu_packet_q.src_1_a;
-    logic [CPU_DATA_BITS-1:0] rs2 = alu_packet_q.src_1_b;
+    logic [CPU_DATA_BITS-1:0] a     = alu_packet_q.src_0_a;
+    logic [CPU_DATA_BITS-1:0] b     = alu_packet_q.src_0_b;
+    logic [CPU_DATA_BITS-1:0] rs1   = alu_packet_q.src_1_a;
+    logic [CPU_DATA_BITS-1:0] rs2   = alu_packet_q.src_1_b;
     logic [CPU_DATA_BITS-1:0] alu_result_d.result;
 
     logic br_result;
@@ -46,9 +46,9 @@ module alu (
             FNC_ADD_SUB:    alu_result_d.result = (alu_packet_q.funct7 == FNC7_SUB_SRA)? (a - b) : (a + b);
             FNC_SLL:        alu_result_d.result = a << b[4:0];
             FNC_SLT:        alu_result_d.result = $signed(a) < $signed(b);
-            FNC_SLTU:;      alu_result_d.result = a < b;
+            FNC_SLTU:       alu_result_d.result = a < b;
             FNC_XOR:        alu_result_d.result = a ^ b;
-            FNC_SRL_SRA:;   alu_result_d.result = (alu_packet_q.funct7 == FNC7_SUB_SRA)? ($signed(a) >>> b[4:0]) : (a >> b[4:0]);
+            FNC_SRL_SRA:    alu_result_d.result = (alu_packet_q.funct7 == FNC7_SUB_SRA)? ($signed(a) >>> b[4:0]) : (a >> b[4:0]);
             FNC_OR:         alu_result_d.result = a | b;
             FNC_AND:        alu_result_d.result = a & b;
         endcase
