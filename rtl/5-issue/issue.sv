@@ -7,7 +7,10 @@
 import riscv_isa_pkg::*;
 import uarch_pkg::*;
 
-module issue (
+module issue #(
+    PIPE_WIDTH,
+    CPU_ADDR_BITS
+)(
     input  logic clk, rst,
 
     // Ports from Dispatch
@@ -37,8 +40,10 @@ module issue (
     output instruction_t                dmem_packet,
 
     // Ports from ROB
-    input  logic [TAG_WIDTH-1:0]        commit_store_ids    [PIPE_WIDTH-1:0];
-    input  logic [PIPE_WIDTH-1:0]       commit_store_vals;
+    //input  logic [TAG_WIDTH-1:0]        commit_store_ids    [PIPE_WIDTH-1:0];
+    //input  logic [PIPE_WIDTH-1:0]       commit_store_vals;
+    //cdb ports not needed?
+    writeback_packet_t           cdb_ports   [PIPE_WIDTH-1:0]
 );
     //-------------------------------------------------------------
     //
