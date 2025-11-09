@@ -2,9 +2,9 @@ module rs (
    //wip
         input logic clk, rst, flush, cache_stall,
     // Ports from Displatch
-    input instruction_t rs_entry[1:0],
+    input instruction_t rs_entry[PIPE_WIDTH:0],
     //Ports to Dispatch
-    output logic [1:0] rs_rdy, //2,1,0 = 2+, 1, 0
+    output logic [PIPE_WIDTH:0] rs_rdy, //2,1,0 = 2+, 1, 0
 
     //Ports to Execute
     output  instruction_t execute_pkt[1:0],
