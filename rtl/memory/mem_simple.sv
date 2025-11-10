@@ -25,21 +25,18 @@ module mem_simple #(
     input  logic                             rst,
 
     // -- IMEM (read) --
-    input  logic [CPU_ADDR_BITS-1:0]         icache_addr,      // byte address (PC)
-    output logic [FETCH_WIDTH*CPU_DATA_BITS-1:0] icache_dout,  // lane0 low bits
-    output logic                             icache_dout_val,  // valid one cycle after icache_re
-    input  logic                             icache_re,
-    input  logic                             icache_stall,     // ignored
+    input  logic [CPU_ADDR_BITS-1:0]        imem_addr,      // byte address (PC)
+    output logic [FETCH_WIDTH*CPU_DATA_BITS-1:0] imem_dout, // lane0 low bits
+    output logic                            imem_dout_val,  // valid one cycle after imem_re
+    input  logic                            imem_re,
+    input  logic                            imem_stall,     // ignored
 
-    // -- DMEM (read) --
-    input  logic [CPU_ADDR_BITS-1:0]         dcache_addr,      // byte address
-    output logic [CPU_DATA_BITS-1:0]         dcache_dout,
-    output logic                             dcache_dout_val,
-    input  logic                             dcache_re,
-    // -- DMEM (write) --
-    input  logic [CPU_DATA_BITS-1:0]         dcache_din,
-    input  logic [(CPU_DATA_BITS/8)-1:0]     dcache_we,        // byte write enables
-    input  logic                             dcache_stall      // ignored
+    // -- DMEM --
+    output logic                            dmem_req_rdy,
+    input  instruction_t                    dmem_req_packet,
+
+    input  logic                            dmem_rec_rdy,
+    output writeback_packet_t               dmem_rec_packet,
 );
     // ------------------------------
     // Local params & storage
@@ -81,17 +78,17 @@ module mem_simple #(
     // ------------------------------
     // IMEM: 1-cycle read latency, parameterized FETCH_WIDTH
     // ------------------------------
-    logic [CPU_ADDR_BITS-1:0] icache_addr_d;
-    logic                     icache_re_d;
+    logic [CPU_ADDR_BITS-1:0] imem_addr_d;
+    logic                     imem_re_d;
 
     // Pipe addr & RE
     always_ff @(posedge clk or posedge rst) begin
         if (rst) begin
-            icache_addr_d <= '0;
-            icache_re_d   <= 1'b0;
+            imem_addr_d <= '0;
+            imem_re_d   <= 1'b0;
         end else begin
-            icache_addr_d <= (icache_re) ? icache_addr : icache_addr_d;
-            icache_re_d   <= (icache_re) ? 1'b1 : icache_re_d;
+            imem_addr_d <= (imem_re) ? imem_addr : imem_addr_d;
+            imem_re_d   <= (imem_re) ? 1'b1 : imem_re_d;
         end
     end
 
@@ -107,20 +104,20 @@ module mem_simple #(
 
     // Pack lanes: lane0=PC, lane1=PC+4, ... (each 32b)
     always_comb begin
-        icache_dout = '0;
+        imem_dout = '0;
         for (int w = 0; w < FETCH_WIDTH; w++) begin
-            logic [CPU_ADDR_BITS-1:0] addr_w = icache_addr_d + (w*INST_BYTES);
-            icache_dout[w*32 +: 32] = (rst)? 'x:word_at(addr_w);
+            logic [CPU_ADDR_BITS-1:0] addr_w = imem_addr_d + (w*INST_BYTES);
+            imem_dout[w*32 +: 32] = (rst)? 'x:word_at(addr_w);
         end
     end
 
-    assign icache_dout_val = icache_re_d && !icache_stall;
+    assign imem_dout_val = imem_re_d && !imem_stall;
 
     // ------------------------------
     // DMEM: write = 0-cycle, read = 1-cycle
     // ------------------------------
-    logic [CPU_ADDR_BITS-1:0] dcache_addr_d;
-    logic                     dcache_re_d;
+    instruction_t   dmem_packet_d;
+    logic           dmem_re_d;
 
     // Writes (byte enables), synchronous
     always_ff @(posedge clk or posedge rst) begin
@@ -128,9 +125,9 @@ module mem_simple #(
             // Already cleared in initial; keep state on rst deassert for simplicity
         end else begin
             for (int i = 0; i < (CPU_DATA_BITS/8); i++) begin
-                if (dcache_we[i]) begin
-                    if ((dcache_addr + i) < DMEM_BYTES) begin
-                        dmem[dcache_addr + i] <= dcache_din[i*8 +: 8];
+                if (dmem_we[i]) begin
+                    if ((dmem_packet.src_0_a + i) < DMEM_BYTES) begin
+                        dmem[dmem_packet.src_0_a + i] <= dmem_packet.src_1_b[i*8 +: 8];
                     end
                 end
             end
@@ -140,25 +137,25 @@ module mem_simple #(
     // Read address/RE pipeline for 1-cycle latency
     always_ff @(posedge clk or posedge rst) begin
         if (rst) begin
-            dcache_addr_d <= '0;
-            dcache_re_d   <= 1'b0;
+            dmem_packet_d <= '{default:'0};
+            dmem_re_d   <= 1'b0;
         end else begin
-            dcache_addr_d <= dcache_re ? dcache_addr : dcache_addr_d;
-            dcache_re_d   <= dcache_re;
+            dmem_packet_d <= dmem_re ? dmem_packet : dmem_packet_d;
+            dmem_re_d   <= dmem_re;
         end
     end
 
     // Read mux (little-endian), with bounds checks
     always_comb begin
-        dcache_dout = '0;
+        dmem_result = '{default:'0};
+        dmem_result.dest_tag = dmem_packet_d.dest_tag;
+        dmem_result.is_valid = dmem_packet_d.is_valid;
         for (int i = 0; i < (CPU_DATA_BITS/8); i++) begin
-            if ((dcache_addr_d + i) < DMEM_BYTES)
-                dcache_dout[i*8 +: 8] = dmem[dcache_addr_d + i];
+            if ((dmem_packet_d.src_0_a + i) < DMEM_BYTES)
+                dmem_result.result[i*8 +: 8] = dmem[dmem_packet_d.src_1_b + i];
             else
-                dcache_dout[i*8 +: 8] = 8'hXX;
+                dmem_result.result[i*8 +: 8] = 8'h00;
         end
     end
-
-    assign dcache_dout_val = dcache_re_d;
 
 endmodule

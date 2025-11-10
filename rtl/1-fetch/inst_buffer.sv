@@ -14,10 +14,10 @@ module inst_buffer (
   // Module I/O
   input logic clk, rst, flush,
 
-  // Port from ICache
+  // Port from imem
   input  logic [CPU_ADDR_BITS-1:0]      pc,
-  input  logic [FETCH_WIDTH*CPU_INST_BITS-1:0]  icache_dout,
-  input  logic                          icache_dout_val,
+  input  logic [FETCH_WIDTH*CPU_INST_BITS-1:0]  imem_dout,
+  input  logic                          imem_dout_val,
   output logic                          inst_buffer_rdy,
 
   // Port to Decoder
@@ -33,7 +33,7 @@ module inst_buffer (
   logic [FETCH_WIDTH*CPU_INST_BITS-1:0] inst_packet_reg [INST_BUFFER_DEPTH-1:0];
 
   logic do_write, do_read;
-  assign do_write = icache_dout_val && inst_buffer_rdy && ~flush;
+  assign do_write = imem_dout_val && inst_buffer_rdy && ~flush;
   assign do_read  = decoder_rdy && ~is_empty && ~flush;
 
   always_ff @(posedge clk or posedge rst or posedge flush) begin
@@ -44,7 +44,7 @@ module inst_buffer (
       inst_packet_reg <= '{default:'0};
     end else begin
       if (do_write) begin // Write
-        inst_packet_reg[write_ptr]  <= icache_dout;
+        inst_packet_reg[write_ptr]  <= imem_dout;
         pc_regs[write_ptr]          <= pc;
         write_ptr                   <= write_ptr + 1;
       end 

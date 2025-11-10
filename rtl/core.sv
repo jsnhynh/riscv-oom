@@ -10,21 +10,18 @@ module core (
     input clk, rst,
 
     // IMEM Ports
-    output logic [CPU_ADDR_BITS-1:0]    icache_addr,
-    output logic                        icache_re,
-    input  logic [FETCH_WIDTH*CPU_DATA_BITS-1:0]  icache_dout,
-    input  logic                        icache_dout_val,
-    input  logic                        icache_stall,
+    output logic [CPU_ADDR_BITS-1:0]    imem_addr,
+    output logic                        imem_re,
+    input  logic [FETCH_WIDTH*CPU_DATA_BITS-1:0]  imem_dout,
+    input  logic                        imem_dout_val,
+    input  logic                        imem_stall,
 
     // DMEM Ports
-    output logic [CPU_ADDR_BITS-1:0]    dcache_addr,
-    output logic                        dcache_re,
-    input  logic [CPU_DATA_BITS-1:0]    dcache_dout,
-    input  logic                        dcache_dout_val,
-    input  logic                        dcache_stall,
-    // DMEM Write Ports
-    output logic [CPU_DATA_BITS-1:0]    dcache_din,
-    output logic [3:0]                  dcache_we
+    input  logic                        dmem_req_rdy,
+    output instruction_t                dmem_req_packet,
+
+    output logic                        dmem_rec_rdy,
+    input  writeback_packet_t           dmem_rec_packet,
 );
     //-------------------------------------------------------------
     // 1-Fetch
@@ -40,15 +37,15 @@ module core (
         .clk(clk),
         .rst(rst),
         .flush(flush),
-        .icache_stall(icache_stall),
+        .imem_stall(imem_stall),
         // Ports from ROB
         .pc_sel(pc_sel),
         .rob_pc(rob_pc),
         // IMEM Ports
-        .icache_addr(icache_addr),
-        .icache_re(icache_re),
-        .icache_dout(icache_dout),
-        .icache_dout_val(icache_dout_val),
+        .imem_addr(imem_addr),
+        .imem_re(imem_re),
+        .imem_dout(imem_dout),
+        .imem_dout_val(imem_dout_val),
         // Ports to Decode
         .decoder_rdy(decoder_rdy),
         .inst_pcs(inst_pcs),
@@ -134,11 +131,13 @@ module core (
     // 5-Issue
     //-------------------------------------------------------------
     logic                   alu_rdy     [1:0];
-    logic                   mdu_rdy,    dmem_rdy;
+    logic                   agu_rdy, mdu_rdy;
     instruction_t           alu_packet  [1:0];
-    instruction_t           mdu_packet, dmem_packet;
+    instruction_t           agu_packet, mdu_packet;
+    writeback_packet_t      agu_result;
     logic [TAG_WIDTH-1:0]   commit_store_ids    [PIPE_WIDTH-1:0];
     logic [PIPE_WIDTH-1:0]  commit_store_vals;
+    writeback_packet_t      cdb_ports   [FETCH_WIDTH-1:0];
     issue issue_stage (
         .clk(clk),
         .rst(rst),
@@ -154,51 +153,48 @@ module core (
         .mdu_rs_entries(mdu_rs_entries),
         .lsq_rs_entries(lsq_rs_entries),
         // Ports to Execute
-        .dcache_addr(dcache_addr),
-        .dcache_re(dcache_re),
-        .dcache_din(dcache_din),
-        .dcache_we(dcache_we),
-        .dcache_stall(dcache_stall),
         .alu_rdy(alu_rdy),
+        .agu_rdy(agu_rdy),
         .mdu_rdy(mdu_rdy),
-        .dmem_rdy(dmem_rdy),
         .alu_packet(alu_packet),
+        .agu_packet(agu_packet),
         .mdu_packet(mdu_packet),
-        .dmem_packet(dmem_packet),
+        // LSQ AGU Writeback
+        .agu_result(agu_result),
+        // Ports to DMEM
+        .dmem_req_rdy(dmem_req_rdy),
+        .dmem_req_packet(dmem_req_packet),
         // Ports from ROB
         .commit_store_ids(commit_store_ids),
-        .commit_store_vals(commit_store_vals)
+        .commit_store_vals(commit_store_vals),
+        .cdb_ports(cdb_ports)
     );
 
     //-------------------------------------------------------------
     // 6-Execute
     //-------------------------------------------------------------
     writeback_packet_t  alu_result  [1:0];
-    writeback_packet_t  mdu_result,     dmem_result;
+    writeback_packet_t  mdu_result;
     logic [1:0]         alu_cdb_gnt;
-    logic               mdu_cdb_gnt,    dmem_cdb_gnt;
-    writeback_packet_t  cdb_ports   [FETCH_WIDTH-1:0];
+    logic               mdu_cdb_gnt;
     execute execute_stage (
         .clk(clk),
         .rst(rst),
         .flush(flush),
         // Ports from Issue
         .alu_rdy(alu_rdy),
+        .agu_rdy(agu_rdy),
         .mdu_rdy(mdu_rdy),
-        .dmem_rdy(dmem_rdy),
         .alu_packet(alu_packet),
+        .agu_packet(agu_packet),
         .mdu_packet(mdu_packet),
-        .dmem_packet(dmem_packet),
-        .dcache_dout(dcache_dout),
-        .dcache_dout_val(dcache_dout_val),
         // CDB Ports
         .alu_result(alu_result),
         .mdu_result(mdu_result),
-        .dmem_result(dmem_result),
         .alu_cdb_gnt(alu_cdb_gnt),
         .mdu_cdb_gnt(mdu_cdb_gnt),
-        .dmem_cdb_gnt(dmem_cdb_gnt),
-        .cdb_ports(cdb_ports)
+        // LSQ AGU Writeback
+        .agu_result(agu_result)
     );
 
     //-------------------------------------------------------------
@@ -208,10 +204,10 @@ module core (
     cdb writeback_stage (
         .alu_result(alu_result),
         .mdu_result(mdu_result),
-        .dmem_result(dmem_result),
+        .dmem_result(dmem_rec_packet),
         .alu_cdb_gnt(alu_cdb_gnt),
         .mdu_cdb_gnt(mdu_cdb_gnt),
-        .dmem_cdb_gnt(dmem_cdb_gnt),
+        .dmem_cdb_gnt(dmem_rec_rdy),
         .cdb_ports(cdb_ports),
         .rob_head(rob_head),
         .rob_tail(rob_tail)

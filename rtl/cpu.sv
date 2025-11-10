@@ -12,24 +12,25 @@ import uarch_pkg::*;
 
 module cpu #(parameter SIMPLE_MEM_MODE = 1) (input clk, rst);
 
+    logic                            dmem_req_rdy,
+    instruction_t                    dmem_req_packet,
+
+    logic                            dmem_rec_rdy,
+    writeback_packet_t               dmem_rec_packet,
+
     core core0 (
         .clk(clk),
         .rst(rst),
         // IMEM Ports
-        .icache_addr(icache_addr),
-        .icache_re(icache_re),
-        .icache_dout(icache_dout),
-        .icache_dout_val(icache_dout_val),
-        .icache_stall(icache_stall),
+        .imem_req_rdy(imem_req_rdy),
+        .imem_req_packet(imem_req_packet),
+        .imem_rec_rdy(imem_rec_rdy),
+        .imem_rec_packet(imem_rec_packet),
         // DMEM Ports
-        .dcache_addr(dcache_addr),
-        .dcache_re(dcache_re),
-        .dcache_dout(dcache_dout),
-        .dcache_dout_val(dcache_dout_val),
-        .dcache_stall(dcache_stall),
-        // DMEM Write Ports
-        .dcache_din(dcache_din),
-        .dcache_we(dcache_we)
+        .dmem_req_rdy(dmem_req_rdy),
+        .dmem_req_packet(dmem_req_packet),
+        .dmem_rec_rdy(dmem_rec_rdy),
+        .dmem_rec_packet(dmem_rec_packet)
     );
 
     generate
@@ -38,20 +39,15 @@ module cpu #(parameter SIMPLE_MEM_MODE = 1) (input clk, rst);
                 .clk(clk),
                 .rst(rst),
                 // IMEM Ports
-                .icache_addr(icache_addr),
-                .icache_re(icache_re),
-                .icache_dout(icache_dout),
-                .icache_dout_val(icache_dout_val),
-                .icache_stall(icache_stall),
+                .imem_req_rdy(imem_req_rdy),
+                .imem_req_packet(imem_req_packet),
+                .imem_rec_rdy(imem_rec_rdy),
+                .imem_rec_packet(imem_rec_packet),
                 // DMEM Ports
-                .dcache_addr(dcache_addr),
-                .dcache_re(dcache_re),
-                .dcache_dout(dcache_dout),
-                .dcache_dout_val(dcache_dout_val),
-                .dcache_stall(dcache_stall),
-                // DMEM Write Ports
-                .dcache_din(dcache_din),
-                .dcache_we(dcache_we)
+                .dmem_req_rdy(dmem_req_rdy),
+                .dmem_req_packet(dmem_req_packet),
+                .dmem_rec_rdy(dmem_rec_rdy),
+                .dmem_rec_packet(dmem_rec_packet),
             );
         end else begin
             // TODO: Cache System Goes Here
