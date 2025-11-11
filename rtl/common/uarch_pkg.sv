@@ -68,7 +68,7 @@ package uarch_pkg;
         logic [TAG_WIDTH-1:0]       dest_tag; // The rob_id
         logic [CPU_DATA_BITS-1:0]   result;
         logic                       is_valid;
-        logic                       is_exception;
+        logic                       exception;
     } writeback_packet_t;
 
     //-------------------------------------------------------------
@@ -87,7 +87,7 @@ package uarch_pkg;
 
         // Result Storage
         logic [CPU_DATA_BITS-1:0]   result;     // For branches, jump_pc is stored in upper 31 bits and LSB is taken/not-taken 
-        logic                       has_exception;
+        logic                       exception;
 
         // Control Flow Information
         logic [6:0]                 opcode;

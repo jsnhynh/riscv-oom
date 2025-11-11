@@ -104,7 +104,7 @@ module dispatch (
         entry.rd        = r_inst.rd;
         entry.has_rd    = r_inst.has_rd;
         // Result is undetermined
-        entry.has_exception = 1'b0;
+        entry.exception = 1'b0;
         entry.opcode    = r_inst.opcode;
         return entry;
     endfunction

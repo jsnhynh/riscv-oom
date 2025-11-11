@@ -11,17 +11,20 @@ import riscv_isa_pkg::*;
 import uarch_pkg::*;
 
 module fetch (
-    input  logic clk, rst, flush, imem_stall,
+    input  logic clk, rst, flush,
 
     // Ports from ROB
     input  logic [2:0]                  pc_sel,
     input  logic [CPU_ADDR_BITS-1:0]    rob_pc,
     
     // IMEM Ports
-    output logic [CPU_ADDR_BITS-1:0]    imem_addr,
-    output logic                        imem_re,
-    input  logic [FETCH_WIDTH*CPU_ADDR_BITS-1:0]  imem_dout,
-    input  logic                        imem_dout_val,
+    input  logic                        imem_req_rdy,
+    output logic                        imem_req_val,
+    output logic [CPU_ADDR_BITS-1:0]    imem_req_packet,
+
+    output logic                        imem_rec_rdy,
+    input  logic                        imem_rec_val,
+    input  logic [FETCH_WIDTH*CPU_INST_BITS-1:0]    imem_rec_packet,
 
     // Ports to Decoder
     input  logic                        decoder_rdy,
@@ -31,13 +34,12 @@ module fetch (
 );
 
     logic [CPU_ADDR_BITS-1:0] pc, pc_next;
-    logic inst_buffer_rdy;
 
     REGISTER_R_CE #(.N(CPU_ADDR_BITS), .INIT(PC_RESET)) pc_reg (
         .q(pc),
         .d(pc_next),
         .rst(rst),
-        .ce(~imem_stall && imem_re),
+        .ce(imem_req_rdy && imem_req_val),
         .clk(clk)
     ); 
 
@@ -47,9 +49,9 @@ module fetch (
         .flush(flush),
 
         .pc(pc),
-        .imem_dout(imem_dout),
-        .imem_dout_val(imem_dout_val),
-        .inst_buffer_rdy(inst_buffer_rdy),
+        .inst_buffer_rdy(imem_rec_rdy),
+        .imem_rec_packet(imem_rec_packet),
+        .imem_rec_val(imem_rec_val),
         
         .decoder_rdy(decoder_rdy),
         .inst_pcs(inst_pcs),
@@ -67,7 +69,7 @@ module fetch (
             endcase
         end
     end
-    assign imem_addr = pc_next;
-    assign imem_re = ~imem_stall && inst_buffer_rdy;
+    assign imem_req_packet = pc_next;
+    assign imem_req_val = imem_req_rdy && imem_rec_rdy;
 
 endmodule

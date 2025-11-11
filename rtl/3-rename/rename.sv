@@ -159,8 +159,7 @@ module rename (
     //-------------------------------------------------------------
     // Handshake and Pipeline Control
     //-------------------------------------------------------------
-    logic can_advance = alloc_ok&;
-    assign rename_rdy = dispatch_rdy && can_advance;
+    assign rename_rdy = dispatch_rdy && alloc_ok&;
     assign rename_val = renamed_insts_next[0] || renamed_insts_next[1];
 
     //-------------------------------------------------------------

@@ -21,22 +21,24 @@ module mem_simple #(
     // Optional: enable a console dump of the first few IMEM words after load
     parameter bit     IMEM_POSTLOAD_DUMP   = 1
 )(
-    input  logic                             clk,
-    input  logic                             rst,
+    input  logic                        clk,
+    input  logic                        rst,
 
     // -- IMEM (read) --
-    input  logic [CPU_ADDR_BITS-1:0]        imem_addr,      // byte address (PC)
-    output logic [FETCH_WIDTH*CPU_DATA_BITS-1:0] imem_dout, // lane0 low bits
-    output logic                            imem_dout_val,  // valid one cycle after imem_re
-    input  logic                            imem_re,
-    input  logic                            imem_stall,     // ignored
+    input  logic                        imem_req_rdy,   // Made input for forced stimulus
+    input  logic                        imem_req_val,
+    input  logic [CPU_ADDR_BITS-1:0]    imem_req_packet,
+
+    input  logic                        imem_rec_rdy,
+    output logic                        imem_rec_val,
+    output logic [FETCH_WIDTH*CPU_INST_BITS-1:0]    imem_rec_packet,
 
     // -- DMEM --
-    output logic                            dmem_req_rdy,
-    input  instruction_t                    dmem_req_packet,
+    output logic                        dmem_req_rdy,
+    input  instruction_t                dmem_req_packet,
 
-    input  logic                            dmem_rec_rdy,
-    output writeback_packet_t               dmem_rec_packet,
+    input  logic                        dmem_rec_rdy,
+    output writeback_packet_t           dmem_rec_packet
 );
     // ------------------------------
     // Local params & storage
@@ -78,17 +80,20 @@ module mem_simple #(
     // ------------------------------
     // IMEM: 1-cycle read latency, parameterized FETCH_WIDTH
     // ------------------------------
-    logic [CPU_ADDR_BITS-1:0] imem_addr_d;
-    logic                     imem_re_d;
+    logic [CPU_ADDR_BITS-1:0] imem_req_addr_d;
+    logic                     imem_req_val_d;
 
     // Pipe addr & RE
     always_ff @(posedge clk or posedge rst) begin
         if (rst) begin
-            imem_addr_d <= '0;
-            imem_re_d   <= 1'b0;
+            imem_req_addr_d <= '0;
+            imem_req_val_d  <= 1'b0;
+        end else if (imem_req_val && imem_rec_rdy) begin
+            imem_req_addr_d <= imem_req_packet;
+            imem_req_val_d  <= imem_req_val;
         end else begin
-            imem_addr_d <= (imem_re) ? imem_addr : imem_addr_d;
-            imem_re_d   <= (imem_re) ? 1'b1 : imem_re_d;
+            imem_req_addr_d <= imem_req_addr_d;
+            imem_req_val_d  <= imem_req_val_d;
         end
     end
 
@@ -104,32 +109,41 @@ module mem_simple #(
 
     // Pack lanes: lane0=PC, lane1=PC+4, ... (each 32b)
     always_comb begin
-        imem_dout = '0;
+        imem_rec_packet = '0;
         for (int w = 0; w < FETCH_WIDTH; w++) begin
-            logic [CPU_ADDR_BITS-1:0] addr_w = imem_addr_d + (w*INST_BYTES);
-            imem_dout[w*32 +: 32] = (rst)? 'x:word_at(addr_w);
+            logic [CPU_ADDR_BITS-1:0] addr_w = imem_req_addr_d + (w*INST_BYTES);
+            imem_rec_packet[w*32 +: 32] = (rst)? 'x:word_at(addr_w);
         end
     end
 
-    assign imem_dout_val = imem_re_d && !imem_stall;
+    assign imem_rec_val = imem_req_val_d && imem_req_rdy;
 
     // ------------------------------
     // DMEM: write = 0-cycle, read = 1-cycle
     // ------------------------------
-    instruction_t   dmem_packet_d;
-    logic           dmem_re_d;
+    instruction_t   dmem_req_packet_d;
+    logic           dmem_req_load_d;
+
+    assign dmem_req_rdy = dmem_rec_rdy && dmem_rec_packet.is_valid;
 
     // Writes (byte enables), synchronous
     always_ff @(posedge clk or posedge rst) begin
         if (rst) begin
             // Already cleared in initial; keep state on rst deassert for simplicity
-        end else begin
-            for (int i = 0; i < (CPU_DATA_BITS/8); i++) begin
-                if (dmem_we[i]) begin
-                    if ((dmem_packet.src_0_a + i) < DMEM_BYTES) begin
-                        dmem[dmem_packet.src_0_a + i] <= dmem_packet.src_1_b[i*8 +: 8];
-                    end
-                end
+        end if (dmem_req_packet.is_valid && (dmem_req_packet.opcode == OPC_STORE)) begin
+            logic [3:0] we;
+            case (dmem_req_packet.uop_0)
+                FNC_B: we = 4'b0001 << dmem_req_packet.src_0_a.data [1:0];
+                FNC_H: we = 4'b0011 << dmem_req_packet.src_0_a.data [1:0];
+                FNC_W: we = 4'b1111;
+                default: we = 4'b0000;
+            endcase
+
+            if (dmem_req_packet.src_0_a.data < DMEM_BYTES - 3) begin
+                if (we[0]) dmem[dmem_req_packet.src_0_a.data + 0] <= dmem_req_packet.src_1_b[7:0];
+                if (we[1]) dmem[dmem_req_packet.src_0_a.data + 1] <= dmem_req_packet.src_1_b[15:8];
+                if (we[2]) dmem[dmem_req_packet.src_0_a.data + 2] <= dmem_req_packet.src_1_b[23:16];
+                if (we[3]) dmem[dmem_req_packet.src_0_a.data + 3] <= dmem_req_packet.src_1_b[31:24];
             end
         end
     end
@@ -137,25 +151,42 @@ module mem_simple #(
     // Read address/RE pipeline for 1-cycle latency
     always_ff @(posedge clk or posedge rst) begin
         if (rst) begin
-            dmem_packet_d <= '{default:'0};
-            dmem_re_d   <= 1'b0;
+            dmem_req_packet_d       <= '{default:'0};
+            dmem_req_load_d         <= 1'b0;
         end else begin
-            dmem_packet_d <= dmem_re ? dmem_packet : dmem_packet_d;
-            dmem_re_d   <= dmem_re;
+            if (dmem_req_packet.is_valid && (dmem_req_packet.opcode == OPC_LOAD)) begin
+                dmem_req_packet_d   <= dmem_req_packet;
+                dmem_req_load_d     <= 1'b1;
+            end else begin
+                dmem_req_packet_d   <= '{default:'0};
+                dmem_req_load_d     <= 1'b0;
+            end
         end
     end
 
-    // Read mux (little-endian), with bounds checks
+    // Read Result Generation
+    logic [CPU_DATA_BITS-1:0] word_data;
     always_comb begin
-        dmem_result = '{default:'0};
-        dmem_result.dest_tag = dmem_packet_d.dest_tag;
-        dmem_result.is_valid = dmem_packet_d.is_valid;
-        for (int i = 0; i < (CPU_DATA_BITS/8); i++) begin
-            if ((dmem_packet_d.src_0_a + i) < DMEM_BYTES)
-                dmem_result.result[i*8 +: 8] = dmem[dmem_packet_d.src_1_b + i];
-            else
-                dmem_result.result[i*8 +: 8] = 8'h00;
+        dmem_rec_packet = '{default:'0};
+        dmem_rec_packet.is_valid = dmem_req_load_d;
+        dmem_rec_packet.dest_tag = dmem_req_packet_d.dest_tag;
+
+        for (int i = 0; i < 4; i++) begin
+            if ((dmem_req_packet_d.src_0_a + i) < DMEM_BYTES) begin
+                word_data[i*8 +: 8] = dmem[dmem_req_packet_d.src_0_a + i];
+            end else begin
+                word_data[i*8 +: 8] = 8'hXX;
+            end
         end
+
+        case(dmem_req_packet_d.uop_0)
+            FNC_B:  dmem_rec_packet.result = {{24{word_data[7]}},   word_data[7:0]};
+            FNC_H:  dmem_rec_packet.result = {{16{word_data[15]}},  word_data[15:0]};
+            FNC_W:  dmem_rec_packet.result = word_data;
+            FNC_BU: dmem_rec_packet.result = {{24{1'b0}}, word_data[7:0]};
+            FNC_HU: dmem_rec_packet.result = {{16{1'b0}}, word_data[15:0]};
+            default: dmem_rec_packet.result = 'x; // Invalid load
+        endcase
     end
 
 endmodule

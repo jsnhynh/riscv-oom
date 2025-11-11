@@ -11,22 +11,22 @@ module fetch_tb;
     logic clk;
     logic rst;
     logic flush_i;
-    logic icache_stall_i;
+    logic imem_req_rdy_i;
 
     logic [2:0]                 pc_sel_i;
     logic [CPU_ADDR_BITS-1:0]   rob_pc_i;
 
     // Interface between DUT and Memory Model
-    logic [CPU_ADDR_BITS-1:0]   icache_addr;
-    logic                       icache_re;
-    logic [FETCH_WIDTH*CPU_INST_BITS-1:0] icache_dout; // Use FETCH_WIDTH from pkg
-    logic                       icache_dout_val;
+    logic [CPU_ADDR_BITS-1:0]   imem_req_packet;
+    logic                       imem_req_val;
+    logic [FETCH_WIDTH*CPU_INST_BITS-1:0] imem_rec_packet;
+    logic                       imem_rec_val;
 
     // Decoder Ports
     logic                       decoder_rdy_i;
     logic [CPU_ADDR_BITS-1:0]   inst_pcs_o  [PIPE_WIDTH-1:0];
     logic [CPU_INST_BITS-1:0]   insts_o     [PIPE_WIDTH-1:0];
-    logic                       inst_val_o;
+    logic                       fetch_val_o;
 
     fetch dut (
         .clk(clk),
@@ -36,16 +36,17 @@ module fetch_tb;
         .pc_sel(pc_sel_i),
         .rob_pc(rob_pc_i),
 
-        .icache_addr(icache_addr),
-        .icache_re(icache_re),
-        .icache_dout(icache_dout),
-        .icache_dout_val(icache_dout_val),
-        .icache_stall(icache_stall_i),
+        .imem_req_rdy(imem_req_rdy_i),
+        .imem_req_val(imem_req_val),
+        .imem_req_packet(imem_req_packet),
+        .imem_rec_rdy(imem_rec_rdy),
+        .imem_rec_val(imem_rec_val),
+        .imem_rec_packet(imem_rec_packet),
 
         .decoder_rdy(decoder_rdy_i),
         .inst_pcs(inst_pcs_o),
         .insts(insts_o),
-        .inst_val(inst_val_o)
+        .fetch_val(fetch_val_o)
     );
 
     mem_simple #(
@@ -54,20 +55,18 @@ module fetch_tb;
         .clk(clk),
         .rst(rst),
         // IMEM Ports
-        .icache_addr(icache_addr),
-        .icache_re(icache_re),
-        .icache_dout(icache_dout),
-        .icache_dout_val(icache_dout_val),
-        .icache_stall(icache_stall_i),
+        .imem_req_rdy(imem_req_rdy_i),
+        .imem_req_val(imem_req_val),
+        .imem_req_packet(imem_req_packet),
+        .imem_rec_rdy(imem_rec_rdy),
+        .imem_rec_val(imem_rec_val),
+        .imem_rec_packet(imem_rec_packet),
 
         // DMEM Ports (Unconnected)
-        .dcache_addr('0),
-        .dcache_re('0),
-        .dcache_dout(),
-        .dcache_dout_val(),
-        .dcache_stall(),
-        .dcache_din('0),
-        .dcache_we('0)
+        .dmem_req_rdy(),
+        .dmem_req_packet('0),
+        .dmem_rec_rdy('0),
+        .dmem_rec_packet()
     );
 
     // Clock Generation
@@ -79,7 +78,7 @@ module fetch_tb;
         clk = 0;
         rst = 1;
         flush_i = 0;
-        icache_stall_i = 0;
+        imem_req_rdy_i = 1;
         pc_sel_i = '0;
         pc_sel_i[0] = flush_i;
         rob_pc_i = '0;
@@ -92,7 +91,7 @@ module fetch_tb;
 
         // -- Test 1: Sequential Fetch --
         $display("[%0t] Test 1: Sequential Fetching...", $time);
-        // assert (icache_addr == PC_RESET) else $fatal(1, "[%0t] PC did not reset correctly. Addr=%h", $time, icache_addr);
+        // assert (imem_req_packet == PC_RESET) else $fatal(1, "[%0t] PC did not reset correctly. Addr=%h", $time, imem_req_packet);
         repeat (5) @(posedge clk); // Let a few fetches happen
         
         
@@ -102,19 +101,19 @@ module fetch_tb;
         repeat (3) begin
             @(posedge clk); // Hold stall
             $display("OUT: PC:%h Inst0:%h | PC4:%h Inst1:%h | Inst Val:%b | ***STALLED",
-            inst_pcs_o[0], insts_o[0], inst_pcs_o[1], insts_o[1], inst_val_o);
+            inst_pcs_o[0], insts_o[0], inst_pcs_o[1], insts_o[1], fetch_val_o);
         end        decoder_rdy_i = 1; // Release stall
         repeat (2) @(posedge clk);    // Allow recovery
 
         // -- Test 3: I-Cache Stall --
         $display("[%0t] Test 3: Cache Stall...", $time);
-        icache_stall_i = 1; // Stall the fetch stage
+        imem_req_rdy_i = 0; // Stall the fetch stage
         repeat (5) begin
             @(posedge clk); // Hold stall
             $display("OUT: PC:%h Inst0:%h | PC4:%h Inst1:%h | Inst Val:%b | ***STALLED",
-            inst_pcs_o[0], insts_o[0], inst_pcs_o[1], insts_o[1], inst_val_o);
+            inst_pcs_o[0], insts_o[0], inst_pcs_o[1], insts_o[1], fetch_val_o);
         end
-        icache_stall_i = 0; // Release stall
+        imem_req_rdy_i = 1; // Release stall
         repeat (3) @(posedge clk);     // Allow recovery
 
         // --- Test 4: Branch/Jump Redirect ---
@@ -126,7 +125,7 @@ module fetch_tb;
         flush_i = 0;        // De-assert flush for next cycle fetch
         pc_sel_i = '0;
         repeat(2) @(posedge clk);     // PC updates, new fetch issued to 0004
-        assert (inst_pcs_o[0] == 32'h0000_0004) else $fatal(1, "[%0t] Redirect failed. Addr=%h", $time, icache_addr);
+        assert (inst_pcs_o[0] == 32'h0000_0004) else $fatal(1, "[%0t] Redirect failed. Addr=%h", $time, imem_req_packet);
         repeat (5) @(posedge clk);
         
 
@@ -138,10 +137,10 @@ module fetch_tb;
     initial begin
         @(negedge rst);
         #1;
-        $monitor ("IN: flush:%b | stall:%b | decode_rdy:%b",
-            flush_i, icache_stall_i, decoder_rdy_i);
+        $monitor ("IN: flush:%b | imem_rec_rdy:%b | decode_rdy:%b",
+            flush_i, imem_rec_rdy, decoder_rdy_i);
         $monitor("OUT: PC:%h Inst0:%h | PC4:%h Inst1:%h | Inst Val:%b | IB_EMPTY:%d",
-            inst_pcs_o[0], insts_o[0], inst_pcs_o[1], insts_o[1], inst_val_o, dut.ib.is_empty);
+            inst_pcs_o[0], insts_o[0], inst_pcs_o[1], insts_o[1], fetch_val_o, dut.ib.is_empty);
 
     end
 

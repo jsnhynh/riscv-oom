@@ -10,18 +10,20 @@ module core (
     input clk, rst,
 
     // IMEM Ports
-    output logic [CPU_ADDR_BITS-1:0]    imem_addr,
-    output logic                        imem_re,
-    input  logic [FETCH_WIDTH*CPU_DATA_BITS-1:0]  imem_dout,
-    input  logic                        imem_dout_val,
-    input  logic                        imem_stall,
+    input  logic                        imem_req_rdy,
+    output logic                        imem_req_val,
+    output logic [CPU_ADDR_BITS-1:0]    imem_req_packet,
+
+    output logic                        imem_rec_rdy,
+    input  logic                        imem_rec_val,
+    input  logic [FETCH_WIDTH*CPU_INST_BITS-1:0]    imem_rec_packet,
 
     // DMEM Ports
     input  logic                        dmem_req_rdy,
     output instruction_t                dmem_req_packet,
 
     output logic                        dmem_rec_rdy,
-    input  writeback_packet_t           dmem_rec_packet,
+    input  writeback_packet_t           dmem_rec_packet
 );
     //-------------------------------------------------------------
     // 1-Fetch
@@ -37,15 +39,16 @@ module core (
         .clk(clk),
         .rst(rst),
         .flush(flush),
-        .imem_stall(imem_stall),
         // Ports from ROB
         .pc_sel(pc_sel),
         .rob_pc(rob_pc),
         // IMEM Ports
-        .imem_addr(imem_addr),
-        .imem_re(imem_re),
-        .imem_dout(imem_dout),
-        .imem_dout_val(imem_dout_val),
+        .imem_req_rdy(imem_req_rdy),
+        .imem_req_val(imem_req_val),
+        .imem_req_packet(imem_req_packet),
+        .imem_rec_rdy(imem_rec_rdy),
+        .imem_rec_val(imem_rec_val),
+        .imem_rec_packet(imem_rec_packet),
         // Ports to Decode
         .decoder_rdy(decoder_rdy),
         .inst_pcs(inst_pcs),
