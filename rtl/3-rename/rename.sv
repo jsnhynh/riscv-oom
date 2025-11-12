@@ -26,7 +26,7 @@ module rename (
     // Ports from ROB
     output logic [PIPE_WIDTH-1:0]   rob_alloc_req,
     input  logic [PIPE_WIDTH-1:0]   rob_alloc_gnt, // Grant for 0, 1, or 2 entries
-    input  logic [TAG_WIDTH-1:0]    rob_tags            [PIPE_WIDTH-1:0],
+    input  logic [TAG_WIDTH-1:0]    rob_alloc_tags      [PIPE_WIDTH-1:0],
     input  prf_commit_write_port_t  commit_write_ports  [PIPE_WIDTH-1:0]
 );
     //-------------------------------------------------------------
@@ -123,18 +123,18 @@ module rename (
         can_rename[1] = decoded_insts[1].is_valid && rob_alloc_gnt[1];
 
         // Step 1: Perform initial renaming for both instructions
-        renamed_insts_tmp[0] = rename_inst(decoded_insts[0], rs1_read_ports[0], rs2_read_ports[0], rob_tags[0], can_rename[0]);
-        renamed_insts_tmp[1] = rename_inst(decoded_insts[1], rs1_read_ports[1], rs2_read_ports[1], rob_tags[1], can_rename[1]);
+        renamed_insts_tmp[0] = rename_inst(decoded_insts[0], rs1_read_ports[0], rs2_read_ports[0], rob_alloc_tags[0], can_rename[0]);
+        renamed_insts_tmp[1] = rename_inst(decoded_insts[1], rs1_read_ports[1], rs2_read_ports[1], rob_alloc_tags[1], can_rename[1]);
 
         // Step 2: Apply intra-group forwards logic for inst 1
         if (can_rename[0] && decoded_insts[0].has_rd && (decoded_insts[1].src_1_a == decoded_insts[0].rd) && (decoded_insts[0].rd != 0)) begin //  inst0's rd == inst1's rs1?
             renamed_insts_tmp[1].src_1_a.is_renamed = 1'b1;
-            renamed_insts_tmp[1].src_1_a.tag       = rob_tags[0];
+            renamed_insts_tmp[1].src_1_a.tag       = rob_alloc_tags[0];
         end
 
         if (can_rename[0] && decoded_insts[0].has_rd && (decoded_insts[1].src_1_b == decoded_insts[0].rd) && (decoded_insts[0].rd != 0)) begin //  inst0's rd == inst1's rs2?
             renamed_insts_tmp[1].src_1_b.is_renamed = 1'b1;
-            renamed_insts_tmp[1].src_1_b.tag        = rob_tags[0];
+            renamed_insts_tmp[1].src_1_b.tag        = rob_alloc_tags[0];
         end
 
         // Step 3: Compaction Logic
@@ -149,7 +149,7 @@ module rename (
 
     // -- Generate Write Ports for PRF --
     assign rat_write_ports[0].addr = decoded_insts[0].rd;
-    assign rat_write_ports[0].tag  = rob_tags[0];
+    assign rat_write_ports[0].tag  = rob_alloc_tags[0];
     assign rat_write_ports[0].we   = decoded_inst[0].is_valid && rob_alloc_gnt[0] && decoded_insts[0].has_rd;
 
     assign rat_write_ports[1].addr = decoded_insts[1].rd;

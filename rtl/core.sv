@@ -81,7 +81,7 @@ module core (
     logic                   dispatch_rdy;
     instruction_t           renamed_insts       [PIPE_WIDTH-1:0];
     logic [PIPE_WIDTH-1:0]  rob_alloc_req, rob_alloc_gnt;
-    logic [TAG_WIDTH-1:0]   rob_tags            [PIPE_WIDTH-1:0];
+    logic [TAG_WIDTH-1:0]   rob_alloc_tags      [PIPE_WIDTH-1:0];
     prf_commit_write_port_t commit_write_ports  [PIPE_WIDTH-1:0];
     rename rename_stage (
         .clk(clk),
@@ -96,7 +96,7 @@ module core (
         // Ports from ROB
         .rob_alloc_req(rob_alloc_req),
         .rob_alloc_gnt(rob_alloc_gnt),
-        .rob_tags(rob_tags),
+        .rob_alloc_tags(rob_alloc_tags),
         .commit_write_ports(commit_write_ports)
     );
 
@@ -228,7 +228,7 @@ module core (
         // Ports to Rename
         .rob_alloc_req(rob_alloc_req),
         .rob_alloc_gnt(rob_alloc_gnt),
-        .rob_tags(rob_tags),
+        .rob_alloc_tags(rob_alloc_tags),
         .commit_write_ports(commit_write_ports),
         /// Ports from Dispatch
         .rob_rdy(rob_rdy),
