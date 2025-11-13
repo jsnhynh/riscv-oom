@@ -62,8 +62,11 @@ module rob (
     //-------------------------------------------------------------
     // Pointer Logic
     //-------------------------------------------------------------
-    assign rob_alloc_gnt[0] = rob_alloc_req[0] && (avail_slots >= 1);
-    assign rob_alloc_gnt[1] = rob_alloc_req[1] && (avail_slots >= (rob_alloc_req[0])? 2 : 1 );
+    logic [1:0] req_cnt;
+    assign req_cnt = rob_alloc_req[0] + rob_alloc_req[1];
+    assign rob_alloc_gnt[0] = rob_alloc_req[0] && (avail_slots >= req_cnt);
+    assign rob_alloc_gnt[1] = rob_alloc_req[1] && (avail_slots >= req_cnt);
+
     assign reserved_cnt     = rob_alloc_gnt[0] + rob_alloc_gnt[1];
 
     assign rob_rdy[0] = alloc_cnt >= 1;
