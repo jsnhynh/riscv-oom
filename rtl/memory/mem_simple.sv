@@ -8,6 +8,9 @@
  * It supports preloading from a hex file via $readmemh for both IMEM and DMEM.
  */
 
+import riscv_isa_pkg::*;
+import uarch_pkg::*;
+
 module mem_simple #(
     // --- Memory sizing ---
     parameter int unsigned IMEM_SIZE_BYTES = 32*1024, // size of instruction memory in bytes
@@ -51,6 +54,7 @@ module mem_simple #(
     // Backing arrays
     logic [31:0] imem [0:IMEM_WORDS-1];    // WORD-PER-LINE for $readmemh
     logic [7:0]  dmem [0:DMEM_BYTES-1];    // byte-addressable data memory
+    logic [7:0]  dmem_next [0:DMEM_BYTES-1];    // byte-addressable data memory
 
     // ------------------------------
     // Preload (IMEM) — WORD-PER-LINE, 32b per line
@@ -121,17 +125,18 @@ module mem_simple #(
     // ------------------------------
     // DMEM: write = 0-cycle, read = 1-cycle
     // ------------------------------
-    instruction_t   dmem_req_packet_d;
-    logic           dmem_req_load_d;
 
-    assign dmem_req_rdy = dmem_rec_rdy && dmem_rec_packet.is_valid;
+    logic dmem_req_handshake, dmem_rec_handshake;
+    assign dmem_req_handshake = dmem_req_rdy && dmem_req_packet.is_valid;
+    assign dmem_rec_handshake = dmem_rec_rdy && dmem_rec_packet.is_valid;
 
-    // Writes (byte enables), synchronous
-    always_ff @(posedge clk or posedge rst) begin
-        if (rst) begin
-            // Already cleared in initial; keep state on rst deassert for simplicity
-        end if (dmem_req_packet.is_valid && (dmem_req_packet.opcode == OPC_STORE)) begin
-            logic [3:0] we;
+    assign dmem_req_rdy = !rst && (!dmem_rec_packet.is_valid || dmem_rec_handshake);
+
+    logic [3:0] we;
+    always_comb begin
+        dmem_next = dmem;
+        we = '0;
+        if (dmem_req_packet.opcode == OPC_STORE) begin
             case (dmem_req_packet.uop_0)
                 FNC_B: we = 4'b0001 << dmem_req_packet.src_0_a.data [1:0];
                 FNC_H: we = 4'b0011 << dmem_req_packet.src_0_a.data [1:0];
@@ -140,53 +145,86 @@ module mem_simple #(
             endcase
 
             if (dmem_req_packet.src_0_a.data < DMEM_BYTES - 3) begin
-                if (we[0]) dmem[dmem_req_packet.src_0_a.data + 0] <= dmem_req_packet.src_1_b[7:0];
-                if (we[1]) dmem[dmem_req_packet.src_0_a.data + 1] <= dmem_req_packet.src_1_b[15:8];
-                if (we[2]) dmem[dmem_req_packet.src_0_a.data + 2] <= dmem_req_packet.src_1_b[23:16];
-                if (we[3]) dmem[dmem_req_packet.src_0_a.data + 3] <= dmem_req_packet.src_1_b[31:24];
+                if (we[0]) dmem_next[dmem_req_packet.src_0_a.data + 0] <= dmem_req_packet.src_1_b.data[7:0];
+                if (we[1]) dmem_next[dmem_req_packet.src_0_a.data + 1] <= dmem_req_packet.src_1_b.data[15:8];
+                if (we[2]) dmem_next[dmem_req_packet.src_0_a.data + 2] <= dmem_req_packet.src_1_b.data[23:16];
+                if (we[3]) dmem_next[dmem_req_packet.src_0_a.data + 3] <= dmem_req_packet.src_1_b.data[31:24];
             end
+        end
+    end
+
+    // Writes (byte enables), synchronous
+    always_ff @(posedge clk or posedge rst) begin
+        if (rst) begin
+            // Already cleared in initial; keep state on rst deassert for simplicity
+        end else if (dmem_req_handshake) begin
+            dmem <= dmem_next;
         end
     end
 
     // Read address/RE pipeline for 1-cycle latency
     always_ff @(posedge clk or posedge rst) begin
         if (rst) begin
-            dmem_req_packet_d       <= '{default:'0};
-            dmem_req_load_d         <= 1'b0;
-        end else begin
-            if (dmem_req_packet.is_valid && (dmem_req_packet.opcode == OPC_LOAD)) begin
-                dmem_req_packet_d   <= dmem_req_packet;
-                dmem_req_load_d     <= 1'b1;
-            end else begin
-                dmem_req_packet_d   <= '{default:'0};
-                dmem_req_load_d     <= 1'b0;
-            end
+            dmem_rec_packet <= '{default:'0};
+        end else if (dmem_req_handshake || dmem_rec_handshake) begin // Take next request if current request complete
+            dmem_rec_packet <= dmem_rec_packet_next;
         end
     end
 
+
     // Read Result Generation
     logic [CPU_DATA_BITS-1:0] word_data;
+    writeback_packet_t dmem_rec_packet_next;
     always_comb begin
-        dmem_rec_packet = '{default:'0};
-        dmem_rec_packet.is_valid = dmem_req_load_d;
-        dmem_rec_packet.dest_tag = dmem_req_packet_d.dest_tag;
+        dmem_rec_packet_next = '{default:'0};
+        dmem_rec_packet_next.is_valid = dmem_req_handshake && dmem_req_packet.opcode == OPC_LOAD;
+        dmem_rec_packet_next.dest_tag = dmem_req_packet.dest_tag;
 
         for (int i = 0; i < 4; i++) begin
-            if ((dmem_req_packet_d.src_0_a + i) < DMEM_BYTES) begin
-                word_data[i*8 +: 8] = dmem[dmem_req_packet_d.src_0_a + i];
+            if ((dmem_req_packet.src_0_a.tag + i) < DMEM_BYTES) begin
+                word_data[i*8 +: 8] = dmem[dmem_req_packet.src_0_a.data + i];
             end else begin
-                word_data[i*8 +: 8] = 8'hXX;
+                word_data[i*8 +: 8] = 8'h00;
             end
         end
 
-        case(dmem_req_packet_d.uop_0)
-            FNC_B:  dmem_rec_packet.result = {{24{word_data[7]}},   word_data[7:0]};
-            FNC_H:  dmem_rec_packet.result = {{16{word_data[15]}},  word_data[15:0]};
-            FNC_W:  dmem_rec_packet.result = word_data;
-            FNC_BU: dmem_rec_packet.result = {{24{1'b0}}, word_data[7:0]};
-            FNC_HU: dmem_rec_packet.result = {{16{1'b0}}, word_data[15:0]};
-            default: dmem_rec_packet.result = 'x; // Invalid load
+        case (dmem_req_packet.uop_0)
+            FNC_B: begin
+                case (dmem_req_packet.src_0_a.data[1:0])
+                    2'b00: dmem_rec_packet_next.result = {{24{word_data[7]}},  word_data[7:0]};    // 0001
+                    2'b01: dmem_rec_packet_next.result = {{24{word_data[15]}}, word_data[15:8]};   // 0010
+                    2'b10: dmem_rec_packet_next.result = {{24{word_data[23]}}, word_data[23:16]};  // 0100
+                    2'b11: dmem_rec_packet_next.result = {{24{word_data[31]}}, word_data[31:24]};  // 1000
+                endcase
+            end
+            FNC_H: begin
+                case (dmem_req_packet.src_0_a.data[1:0])
+                    2'b00: dmem_rec_packet_next.result = {{16{word_data[15]}}, word_data[15:0]};   // 0011
+                    2'b10: dmem_rec_packet_next.result = {{16{word_data[31]}}, word_data[31:16]};  // 1100
+                    default: dmem_rec_packet_next.result = '0;
+                endcase
+            end
+            FNC_W: dmem_rec_packet_next.result = (dmem_req_packet.src_0_a.data[1:0] == 2'b00)? word_data : 32'b0;  // 1111
+            FNC_BU: begin
+                case (dmem_req_packet.src_0_a.data[1:0])
+                    2'b00: dmem_rec_packet_next.result = {24'b0, word_data[7:0]};   // 0001
+                    2'b01: dmem_rec_packet_next.result = {24'b0, word_data[15:8]};  // 0010
+                    2'b10: dmem_rec_packet_next.result = {24'b0, word_data[23:16]}; // 0100
+                    2'b11: dmem_rec_packet_next.result = {24'b0, word_data[31:24]}; // 1000
+                endcase
+            end
+            FNC_HU: begin
+                case (dmem_req_packet.src_0_a.data[1:0])
+                    2'b00: dmem_rec_packet_next.result = {16'b0, word_data[15:0]};   // 0011
+                    2'b10: dmem_rec_packet_next.result = {16'b0, word_data[31:16]};  // 1100
+                    default: dmem_rec_packet_next.result = '0;
+                endcase
+            end
         endcase
+        
+        if (dmem_rec_handshake && !dmem_req_handshake)
+            dmem_rec_packet_next = '{default:'0};
+
     end
 
 endmodule
