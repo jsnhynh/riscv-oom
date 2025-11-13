@@ -19,7 +19,7 @@ package uarch_pkg;
     localparam FETCH_WIDTH      = 2;        // Number of instructions per fetch
     localparam PIPE_WIDTH       = 2;        // Number of instructions processed
 
-    localparam ROB_ENTRIES      = 8;
+    localparam ROB_ENTRIES      = 32;
     localparam ALU_RS_ENTRIES   = 8;
     localparam MDU_RS_ENTRIES   = 4;
     localparam LSQ_ENTRIES      = 8;
