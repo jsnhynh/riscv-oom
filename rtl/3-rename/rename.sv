@@ -33,7 +33,7 @@ module rename (
     // Internal Wires and Connections
     //-------------------------------------------------------------
     source_t                rs1_read_ports  [PIPE_WIDTH-1:0];
-    source_t                rs1_read_ports  [PIPE_WIDTH-1:0];
+    source_t                rs2_read_ports  [PIPE_WIDTH-1:0];
     prf_rat_write_port_t    rat_write_ports [PIPE_WIDTH-1:0];
 
     prf prf_inst (
@@ -41,8 +41,8 @@ module rename (
         .rst(rst),
         .flush(flush),
 
-        .rs1({decoded_insts[1].src_1_a, decoded_insts[0].src_1_a}),
-        .rs2({decoded_insts[1].src_1_b, decoded_insts[0].src_1_b}),
+        .rs1({decoded_insts[1].src_1_a.tag, decoded_insts[0].src_1_a.tag}),
+        .rs2({decoded_insts[1].src_1_b.tag, decoded_insts[0].src_1_b.tag}),
         .rs1_read_ports(rs1_read_ports),
         .rs2_read_ports(rs2_read_ports),
 
@@ -63,11 +63,11 @@ module rename (
     );
         instruction_t r_inst;
         r_inst = '{default:'0};
-        r_inst.is_valid = alloc_gnt;
+        r_inst.is_valid = alloc_gnt && d_inst.is_valid;
 
         // Pass-through fields from decode
         r_inst.pc           = d_inst.pc;
-        r_inst.rd           = r_inst.rd
+        r_inst.rd           = d_inst.rd;
         r_inst.has_rd       = d_inst.has_rd;
         r_inst.br_taken     = d_inst.br_taken;
         r_inst.opcode       = d_inst.opcode;
@@ -83,7 +83,6 @@ module rename (
             r_inst.src_0_a.tag          = rs1_port.tag;
             r_inst.src_0_a.is_renamed   = rs1_port.is_renamed;
         end else r_inst.src_0_a.data    = d_inst.src_0_a.data; // Pass PC
-
 
         if (d_inst.src_0_b.tag == d_inst.src_1_b.tag) begin
             r_inst.src_0_b.data         = rs2_port.data;
@@ -106,39 +105,34 @@ module rename (
     // Conbinational Renaming Logic
     //-------------------------------------------------------------
     instruction_t renamed_insts_next [PIPE_WIDTH-1:0];
-    logic [PIPE_WIDTH-1:0] alloc_ok;
+    logic all_gnts_ok;
 
     // Request ROB entries based on validity of incoming instructions
     assign rob_alloc_req[0] = decoded_insts[0].is_valid;
     assign rob_alloc_req[1] = decoded_insts[1].is_valid;
 
-    assign alloc_ok[0] = !decoded_insts[0].is_valid || (decoded_insts[0].is_valid && rob_alloc_gnt[0]);
-    assign alloc_ok[1] = !decoded_insts[1].is_valid || (decoded_insts[1].is_valid && rob_alloc_gnt[1]);
+    assign all_gnts_ok = (!decoded_insts[0].is_valid || rob_alloc_gnt[0]) && (!decoded_insts[1].is_valid || rob_alloc_gnt[1]);
 
     always_comb begin
         instruction_t renamed_insts_tmp [PIPE_WIDTH-1:0];
-        logic [PIPE_WIDTH-1:0] can_rename;
-
-        can_rename[0] = decoded_insts[0].is_valid && rob_alloc_gnt[0];
-        can_rename[1] = decoded_insts[1].is_valid && rob_alloc_gnt[1];
 
         // Step 1: Perform initial renaming for both instructions
-        renamed_insts_tmp[0] = rename_inst(decoded_insts[0], rs1_read_ports[0], rs2_read_ports[0], rob_alloc_tags[0], can_rename[0]);
-        renamed_insts_tmp[1] = rename_inst(decoded_insts[1], rs1_read_ports[1], rs2_read_ports[1], rob_alloc_tags[1], can_rename[1]);
+        renamed_insts_tmp[0] = rename_inst(decoded_insts[0], rs1_read_ports[0], rs2_read_ports[0], rob_alloc_tags[0], all_gnts_ok);
+        renamed_insts_tmp[1] = rename_inst(decoded_insts[1], rs1_read_ports[1], rs2_read_ports[1], rob_alloc_tags[1], all_gnts_ok);
 
         // Step 2: Apply intra-group forwards logic for inst 1
-        if (can_rename[0] && decoded_insts[0].has_rd && (decoded_insts[1].src_1_a == decoded_insts[0].rd) && (decoded_insts[0].rd != 0)) begin //  inst0's rd == inst1's rs1?
+        if (decoded_insts[0].is_valid && rob_alloc_gnt[0] && decoded_insts[0].has_rd && (decoded_insts[1].src_1_a == decoded_insts[0].rd) && (decoded_insts[0].rd != 0)) begin //  inst0's rd == inst1's rs1?
             renamed_insts_tmp[1].src_1_a.is_renamed = 1'b1;
             renamed_insts_tmp[1].src_1_a.tag       = rob_alloc_tags[0];
         end
 
-        if (can_rename[0] && decoded_insts[0].has_rd && (decoded_insts[1].src_1_b == decoded_insts[0].rd) && (decoded_insts[0].rd != 0)) begin //  inst0's rd == inst1's rs2?
+        if (decoded_insts[0].is_valid && rob_alloc_gnt[0] && decoded_insts[0].has_rd && (decoded_insts[1].src_1_b == decoded_insts[0].rd) && (decoded_insts[0].rd != 0)) begin //  inst0's rd == inst1's rs2?
             renamed_insts_tmp[1].src_1_b.is_renamed = 1'b1;
             renamed_insts_tmp[1].src_1_b.tag        = rob_alloc_tags[0];
         end
 
         // Step 3: Compaction Logic
-        if (!renamed_insts[0].is_valid && renamed_insts[1].is_valid) begin
+        if (!renamed_insts_tmp[0].is_valid && renamed_insts_tmp[1].is_valid) begin
             renamed_insts_next[0] = renamed_insts_tmp[1];
             renamed_insts_next[1] = '{default:'0};
         end else begin
@@ -150,17 +144,16 @@ module rename (
     // -- Generate Write Ports for PRF --
     assign rat_write_ports[0].addr = decoded_insts[0].rd;
     assign rat_write_ports[0].tag  = rob_alloc_tags[0];
-    assign rat_write_ports[0].we   = decoded_inst[0].is_valid && rob_alloc_gnt[0] && decoded_insts[0].has_rd;
+    assign rat_write_ports[0].we   = decoded_insts[0].is_valid && rob_alloc_gnt[0] && decoded_insts[0].has_rd;
 
     assign rat_write_ports[1].addr = decoded_insts[1].rd;
-    assign rat_write_ports[1].tag  = rob_tag[1];
-    assign rat_write_ports[1].we   = decoded_inst[1].is_valid && rob_alloc_gnt[1] && decoded_insts[1].has_rd;
+    assign rat_write_ports[1].tag  = rob_alloc_tags[1];
+    assign rat_write_ports[1].we   = decoded_insts[1].is_valid && rob_alloc_gnt[1] && decoded_insts[1].has_rd;
 
     //-------------------------------------------------------------
     // Handshake and Pipeline Control
     //-------------------------------------------------------------
-    assign rename_rdy = dispatch_rdy && alloc_ok&;
-    assign rename_val = renamed_insts_next[0] || renamed_insts_next[1];
+    assign rename_rdy = dispatch_rdy && all_gnts_ok;
 
     //-------------------------------------------------------------
     // Pipeline Register Logic
