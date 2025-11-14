@@ -41,21 +41,24 @@ task toggle_rst();
 endtask
 function instruction_t gen_random_instr_pkt(logic [CPU_DATA_BITS-1:0]   data_h, data_l, logic [TAG_WIDTH-1:0] tag_h, tag_l, int ren = 1);
     instruction_t out;
+    int r;
     out = '0;
     out.is_valid = 1'b1;
+
     out.src_0_a.data        = $random % 100;
-    out.src_0_a.tag         = $urandom_range(tag_h, tag_l);
+    out.src_0_a.tag         = (tag_h == tag_l) ? tag_h :$random % (tag_h - tag_l) + tag_l;
     out.src_0_b.data        = $random % 100;
-    out.src_0_b.tag         = $urandom_range(tag_h, tag_l);
+    out.src_0_b.tag         = (tag_h == tag_l) ? tag_h :$random % (tag_h - tag_l) + tag_l;;
     out.src_1_a.data        = $random % 100;
-    out.src_1_a.tag         = $urandom_range(tag_h, tag_l);
+    out.src_1_a.tag         = (tag_h == tag_l) ? tag_h :$random % (tag_h - tag_l) + tag_l;;
     out.src_1_b.data        = $random % 100;
-    out.src_1_b.tag         = $urandom_range(tag_h, tag_l);
+    out.src_1_b.tag         = (tag_h == tag_l) ? tag_h :$random % (tag_h - tag_l) + tag_l;;
     if(ren == 1) begin 
-        out.src_0_a.is_renamed  = $urandom_range(1, 0);
-        out.src_0_b.is_renamed  = $urandom_range(1, 0);
-        out.src_1_a.is_renamed  = $urandom_range(1, 0);
-        out.src_1_b.is_renamed  = $urandom_range(1, 0);
+        r = $random % 2;
+        out.src_0_a.is_renamed  = r;
+        out.src_0_b.is_renamed  = r;
+        out.src_1_a.is_renamed  = r;
+        out.src_1_b.is_renamed  = r;
     end
     else if (ren == 2) begin
         out.src_0_a.is_renamed  = 1'b1; 
@@ -69,26 +72,25 @@ function writeback_packet_t gen_random_cbd_pkt(logic [CPU_DATA_BITS-1:0] data_h,
     writeback_packet_t out;
     out.result = $random % 100;
     out.is_valid = 1'b1;
-    out.dest_tag = $urandom_range(tag_h, tag_l);
+    out.dest_tag = (tag_h == tag_l) ? tag_h :$random % (tag_h - tag_l) + tag_l;;
     out.exception = '0;
     return out;
 endfunction
 
 task rndm_tst();
-    alu_re = 1'b0;
-    rs_we = 1'b0;
+    instruction_t j;
     forever begin
-        #1;
         if(rs_write_rdy == 1'b1) begin
-            rs_entry = gen_random_instr_pkt(32'hffff_ffff, 32'h000_0000, 5'd8, 5'd0);
+            j = gen_random_instr_pkt(32'hffff_ffff, 32'h000_0000, 5'd8, 5'd0);
+            rs_entry <= j;
             rs_we <= 1'b1;
 
         end
         @(posedge clk);
         rs_we <= 1'b0;
         while(rs_read_rdy == 1'b0) begin
-            cdb_ports[0] = gen_random_cbd_pkt(32'hffff_ffff, 32'h000_0000, 5'd8, 5'd5);
-            cdb_ports[1] = gen_random_cbd_pkt(32'hffff_ffff, 32'h000_0000, 5'd4, 5'd0);
+            cdb_ports[0] <= gen_random_cbd_pkt(32'hffff_ffff, 32'h000_0000, 5'd8, 5'd5);
+            cdb_ports[1] <= gen_random_cbd_pkt(32'hffff_ffff, 32'h000_0000, 5'd4, 5'd0);
             @(posedge clk);
         end
         if($time % 2 == 0) alu_re <= 1'b1;
@@ -116,10 +118,25 @@ task single_trasaction();
         $finish;
     end
 endtask
+
+task cdb_forward();
+     if(rs_write_rdy == 1'b1) begin
+        rs_entry = gen_random_instr_pkt(32'hffff_ffff, 32'h000_0000, 5'd8, 5'd8, 2); //tag is 8, renamed
+        cdb_ports[0] <= gen_random_cbd_pkt(32'hffff_ffff, 32'h000_0000, 5'd8, 5'd8);
+        rs_we <= 1'b1;
+        @(posedge clk);
+        rs_we <= 1'b0;
+        @(posedge clk);      
+        cdb_ports[0] <= '0;
+        @(posedge clk);
+        $finish;
+    end
+endtask
 initial begin
     toggle_rst();
     //rndm_tst();
-    single_trasaction();
+    //single_trasaction();
+    cdb_forward();
 end
 
 endmodule
