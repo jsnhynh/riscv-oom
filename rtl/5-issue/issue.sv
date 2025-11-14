@@ -12,16 +12,19 @@ module issue (
 
     // Ports from Dispatch
     output logic [PIPE_WIDTH-1:0]       alu_rs_rdy,
-    output logic [PIPE_WIDTH-1:0]       lsq_rs_rdy,
+    output logic [PIPE_WIDTH-1:0]       lsq_ld_rdy,
+    output logic [PIPE_WIDTH-1:0]       lsq_st_rdy,
     output logic [PIPE_WIDTH-1:0]       mdu_rs_rdy,
 
     input  logic [PIPE_WIDTH-1:0]       alu_rs_we,
-    input  logic [PIPE_WIDTH-1:0]       lsq_rs_we,
+    input  logic [PIPE_WIDTH-1:0]       lsq_ld_we,
+    input  logic [PIPE_WIDTH-1:0]       lsq_st_we,
     input  logic [PIPE_WIDTH-1:0]       mdu_rs_we,
 
     input  instruction_t                alu_rs_entries [PIPE_WIDTH-1:0],
     input  instruction_t                mdu_rs_entries [PIPE_WIDTH-1:0],
-    input  instruction_t                lsq_rs_entries [PIPE_WIDTH-1:0],
+    input  instruction_t                lsq_ld_entries [PIPE_WIDTH-1:0],
+    input  instruction_t                lsq_st_entries [PIPE_WIDTH-1:0],
 
     // Ports to Execute
     input  logic                        alu_rdy     [1:0], 

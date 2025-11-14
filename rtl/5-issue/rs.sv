@@ -106,72 +106,54 @@ module rs (
     end
 
 
-typedef enum bit {PASS_THRU, STALLED} rs_state_e;
+typedef enum bit {IDLE, PASS_THRU} rs_state_e;
 rs_state_e state, nxt_state;
 always_ff @( posedge clock ) begin 
     if(rst || flush) begin 
-        state <= PASS_THRU;
+        state <= IDLE;
     end
     else begin
         state <= next_state;
     end
 end
+//I THINK THERE IS AN ERROR WITH RS_WRITE_READY BEING ASSIGNED A CYCLE EARLY, WILL UPDATE LATER
 always_comb begin
     valid_nxt = 1'b0;
     rs_write_rdy = 1'b0;
     rs_read_rdy = 1'b0;
     case (state)
-        PASS_THRU: begin
-            if(rs_entry.is_valid && rs_we) begin
-                if( 
-                !execute_pkt.src_0_a.is_renamed &&  
-                !execute_pkt.src_0_b.is_renamed && 
-                !execute_pkt.src_1_a.is_renamed &&
-                !execute_pkt.src_1_b.is_renamed) begin
-                    if(alu_re) begin
-                        next_state = PASS_THRU;
-                        rs_write_rdy = 1'b1;
-                        rs_read_rdy = 1'b1;
-                    end
-                    else begin
-                        next_state = STALLED;
-                        rs_read_rdy = 1'b1;
-                        rs_write_rdy = 1'b0;
-                    end
-                end
-                else begin //if something renamed cant read/write
-                     next_state = STALLED;
-                     rs_read_rdy = 1'b0;
-                     rs_write_rdy = 1'b0;
-                end
-            end
-            else begin
-                rs_write_rdy = 1'b1;
-                rs_read_rdy = 1'b0;
+        IDLE : begin
+            rs_write_rdy = 1'b1;
+             if(rs_entry.is_valid && rs_we) begin
                 next_state = PASS_THRU;
-            end
-        end 
-        STALLED: begin
-            if( 
-                !execute_pkt.src_0_a.is_renamed &&  
+             end
+        end
+        PASS_THRU: begin
+            if( !execute_pkt.src_0_a.is_renamed &&  
                 !execute_pkt.src_0_b.is_renamed && 
                 !execute_pkt.src_1_a.is_renamed &&
                 !execute_pkt.src_1_b.is_renamed) begin
+                    rs_read_rdy = 1'b1;
                 if(alu_re) begin
-                    next_state = PASS_THRU;
-                    rs_write_rdy = 1'b1;
-                    rs_read_rdy = 1'b1;
+                    if(rs_we) next_state = PASS_THRU;
+                    else begin
+                        next_state = IDLE;
+                        man_flush = 1'b1;
                     end
+                    rs_write_rdy = 1'b1;
+                end
                 else begin
-                    next_state = STALLED;
-                    rs_read_rdy = 1'b1;
+                    next_state = PASS_THRU;
                     rs_write_rdy = 1'b0;
                 end
             end
-            else next_state = STALLED;
-            rs_read_rdy = 1'b0;
-            rs_write_rdy = 1'b0;
-        end
+            else begin //if something renamed cant read/write
+                 next_state = PASS_THRU;
+                 rs_read_rdy = 1'b0;
+                 rs_write_rdy = 1'b0;
+            end   
+        end 
+
     endcase
 end
 
