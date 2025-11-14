@@ -1,11 +1,14 @@
-module rs (
+module rs 
+import riscv_isa_pkg::*; 
+import uarch_pkg::*;
+ (
     input logic clk, rst, flush, cache_stall,
     // Ports from Displatch
     input instruction_t rs_entry,
-    input bit rs_we,
+    input logic rs_we,
     //Ports to Dispatch
-    output bit rs_write_rdy,
-    output bit rs_read_rdy,
+    output logic rs_write_rdy,
+    output logic rs_read_rdy,
     //Ports to Execute
     output  instruction_t execute_pkt,
 
@@ -15,35 +18,35 @@ module rs (
     //CDB PORT 
     input writeback_packet_t cdb_ports [PIPE_WIDTH - 1 : 0]
 );
-
     function  int oh_2_i (logic [PIPE_WIDTH-1:0] v);
         int o;
-        o = 0;
-        onehot_to_idx = -1;
-        for (int i = 0; i < NUM_CDB; i++) if (v[i]) o = i;
+        o = -1;
+        for (int i = 0; i < PIPE_WIDTH; i++) if (v[i]) o = i;
         return o;
     endfunction
 
     //ONE HOT encoded vector which says which  src_... is in if it is there at all
-    bit [PIPE_WIDTH - 1 : 0] src_0_a_in_cdb, c0_src_0_a_in_cdb; 
-    bit [PIPE_WIDTH - 1 : 0] src_0_b_in_cdb, c0_src_0_b_in_cdb;
-    bit [PIPE_WIDTH - 1 : 0] src_1_a_in_cdb, c0_src_1_a_in_cdb;
-    bit [PIPE_WIDTH - 1 : 0] src_1_b_in_cdb, c0_src_1_b_in_cdb;
+    logic [PIPE_WIDTH - 1 : 0] src_0_a_in_cdb, c0_src_0_a_in_cdb; 
+    logic [PIPE_WIDTH - 1 : 0] src_0_b_in_cdb, c0_src_0_b_in_cdb;
+    logic [PIPE_WIDTH - 1 : 0] src_1_a_in_cdb, c0_src_1_a_in_cdb;
+    logic [PIPE_WIDTH - 1 : 0] src_1_b_in_cdb, c0_src_1_b_in_cdb;
+
     always_comb begin
         for(int i = 0; i < PIPE_WIDTH; i++) begin
-            src_0_a_in_cdb = execute_pkt.src_0_a.is_renamed && (cdb_ports[i].is_valid && (cdb_ports[i].dest_tag == execute_pkt.src_0_a.tag));
-            src_0_b_in_cdb = execute_pkt.src_0_b.is_renamed && (cdb_ports[i].is_valid && (cdb_ports[i].dest_tag == execute_pkt.src_0_b.tag));
-            src_1_a_in_cdb = execute_pkt.src_1_a.is_renamed && (cdb_ports[i].is_valid && (cdb_ports[i].dest_tag == execute_pkt.src_1_a.tag));
-            src_1_b_in_cdb = execute_pkt.src_1_b.is_renamed && (cdb_ports[i].is_valid && (cdb_ports[i].dest_tag == execute_pkt.src_1_b.tag));
+            src_0_a_in_cdb[i] = execute_pkt.src_0_a.is_renamed && (cdb_ports[i].is_valid && (cdb_ports[i].dest_tag == execute_pkt.src_0_a.tag));
+            src_0_b_in_cdb[i] = execute_pkt.src_0_b.is_renamed && (cdb_ports[i].is_valid && (cdb_ports[i].dest_tag == execute_pkt.src_0_b.tag));
+            src_1_a_in_cdb[i] = execute_pkt.src_1_a.is_renamed && (cdb_ports[i].is_valid && (cdb_ports[i].dest_tag == execute_pkt.src_1_a.tag));
+            src_1_b_in_cdb[i] = execute_pkt.src_1_b.is_renamed && (cdb_ports[i].is_valid && (cdb_ports[i].dest_tag == execute_pkt.src_1_b.tag));
             
-            c0_src_0_a_in_cdb = rs_entry.src_0_a.is_renamed && (cdb_ports[i].is_valid && (cdb_ports[i].dest_tag == rs_entry.src_0_a.tag));
-            c0_src_0_b_in_cdb = rs_entry.src_0_b.is_renamed && (cdb_ports[i].is_valid && (cdb_ports[i].dest_tag == rs_entry.src_0_b.tag));
-            c0_src_1_a_in_cdb = rs_entry.src_1_a.is_renamed && (cdb_ports[i].is_valid && (cdb_ports[i].dest_tag == rs_entry.src_1_a.tag));
-            c0_src_1_b_in_cdb = rs_entry.src_1_b.is_renamed && (cdb_ports[i].is_valid && (cdb_ports[i].dest_tag == rs_entry.src_1_b.tag));
+            c0_src_0_a_in_cdb[i] = rs_entry.src_0_a.is_renamed && (cdb_ports[i].is_valid && (cdb_ports[i].dest_tag == rs_entry.src_0_a.tag));
+            c0_src_0_b_in_cdb[i] = rs_entry.src_0_b.is_renamed && (cdb_ports[i].is_valid && (cdb_ports[i].dest_tag == rs_entry.src_0_b.tag));
+            c0_src_1_a_in_cdb[i] = rs_entry.src_1_a.is_renamed && (cdb_ports[i].is_valid && (cdb_ports[i].dest_tag == rs_entry.src_1_a.tag));
+            c0_src_1_b_in_cdb[i] = rs_entry.src_1_b.is_renamed && (cdb_ports[i].is_valid && (cdb_ports[i].dest_tag == rs_entry.src_1_b.tag));
         end
     end
 
     //rs_entry register
+
     always_ff @( posedge clk ) begin 
         if (rst || flush) execute_pkt <= '0;
         else begin //updating rs reg with new value
@@ -106,9 +109,9 @@ module rs (
     end
 
 
-typedef enum bit {IDLE, PASS_THRU} rs_state_e;
-rs_state_e state, nxt_state;
-always_ff @( posedge clock ) begin 
+typedef enum logic {IDLE, PASS_THRU} rs_state_e;
+rs_state_e state, next_state;
+always_ff @( posedge clk ) begin 
     if(rst || flush) begin 
         state <= IDLE;
     end
@@ -116,17 +119,19 @@ always_ff @( posedge clock ) begin
         state <= next_state;
     end
 end
+logic man_flush;
 //I THINK THERE IS AN ERROR WITH RS_WRITE_READY BEING ASSIGNED A CYCLE EARLY, WILL UPDATE LATER
 always_comb begin
-    valid_nxt = 1'b0;
     rs_write_rdy = 1'b0;
     rs_read_rdy = 1'b0;
+    man_flush = 1'b0;
     case (state)
         IDLE : begin
             rs_write_rdy = 1'b1;
              if(rs_entry.is_valid && rs_we) begin
                 next_state = PASS_THRU;
              end
+             else next_state = IDLE;
         end
         PASS_THRU: begin
             if( !execute_pkt.src_0_a.is_renamed &&  
