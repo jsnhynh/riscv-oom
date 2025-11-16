@@ -1,9 +1,15 @@
-module rs (
+module alu_rs
+import riscv_isa_pkg::*; 
+import uarch_pkg::*;
+ #(
+    RS_SIZE = 5
+ )(
    //wip
     input logic clk, rst, flush, cache_stall,
     // Ports from Displatch
     input instruction_t rs_entry[PIPE_WIDTH - 1 : 0],
-    input logic [RS_SIZE - 1 : 0] rs_we,
+
+    input logic [PIPE_WIDTH - 1 : 0] rs_we,
     //Ports to Dispatch
     output logic [PIPE_WIDTH - 1 : 0] rs_rdy, //2,1,0 = 2+, 1, 0
     //Ports to Execute
@@ -14,20 +20,21 @@ module rs (
     input writeback_packet_t cdb_ports [PIPE_WIDTH - 1 : 0] 
 );
 //how many alu we have
-function  int oh_2_i (logic [PIPE_WIDTH-1:0] v);
+function int oh_2_i (logic [PIPE_WIDTH-1:0] v);
         int o;
-        o = 0;
-        onehot_to_idx = -1;
-        for (int i = 0; i < NUM_CDB; i++) if (v[i]) o = i;
+        o = -1;
+        for (int i = 0; i < PIPE_WIDTH; i++) if (v[i]) o = i;
         return o;
     endfunction
 
 
-bit [RS_SIZE - 1 : 0] indv_rs_we;
-bit [RS_SIZE - 1 : 0] indv_rs_write_rdy ;
-bit [RS_SIZE - 1 : 0] [PIPE_WIDTH - 1 : 0]  rs_sel;
-bit [RS_SIZE - 1 : 0] indv_rs_read_rdy ;
+logic [RS_SIZE - 1 : 0] indv_rs_we;
+logic [RS_SIZE - 1 : 0] indv_rs_write_rdy ;
+logic [RS_SIZE - 1 : 0] [PIPE_WIDTH - 1 : 0]  rs_sel;
+logic [RS_SIZE - 1 : 0] indv_rs_read_rdy ;
+logic [RS_SIZE - 1 : 0] indv_alu_rdy ;
 instruction_t indv_execute_pkt [RS_SIZE - 1 : 0];
+instruction_t muxed_rs_entry [RS_SIZE - 1 : 0];
 
 genvar i;
 generate
@@ -38,8 +45,8 @@ generate
         .flush(flush), 
         .cache_stall(cache_stall),
         // Ports from Displatch
-        .rs_entry(muxed_rs_entry),
-        .rs_we(indv_rs_we[i])
+        .rs_entry(muxed_rs_entry[i]),
+        .rs_we(indv_rs_we[i]),
         //Ports to Dispatch
         .rs_write_rdy(indv_rs_write_rdy[i]),
         .rs_read_rdy(indv_rs_read_rdy[i]),
@@ -56,9 +63,9 @@ endgenerate
 logic [$clog2(PIPE_WIDTH) + 1 : 0] s;
 logic [$clog2(RS_SIZE) + 1 : 0] total_open_entries, total_ready_entries;
 function int ret_exe_candidate(int best_no);
-    instruction_t candidate [best_no];
-    int o [best_no];
-    foreach(canditate[i]) candidate[i] = '0;
+    instruction_t candidate [RS_SIZE];
+    int o [RS_SIZE];
+    foreach(candidate[i]) candidate[i] = '0;
 
     for(int i = 0; i < best_no; i++) begin
         foreach(indv_execute_pkt[j]) begin
@@ -69,18 +76,18 @@ function int ret_exe_candidate(int best_no);
                 end
                 else if (indv_execute_pkt[j].pc < candidate[i].pc)begin
                     if(i == 0) begin
-                        canditate[i] = indv_execute_pkt[j];
+                        candidate[i] = indv_execute_pkt[j];
                         o[i] = j;
                     end
                     else if (o[i] != o[i - 1]) begin
-                        canditate[i] = indv_execute_pkt[j];
+                        candidate[i] = indv_execute_pkt[j];
                         o[i] = j;
                     end
                 end
             end
         end
     end
-    return o[best_no];
+    return o[best_no - 1];
 endfunction
 
 int c1, c2;
@@ -88,6 +95,8 @@ always_comb begin
     s = 0;
     foreach (indv_alu_rdy[i]) indv_alu_rdy[i] = 1'b0;
     total_open_entries = '0;
+    total_ready_entries = '0;
+    indv_rs_we = '0;
     for(int i = 0; i < RS_SIZE; i++) begin
         //this if condition is hella sus if it works thank god but idk
         if(indv_rs_write_rdy[i] == 1'b1 && rs_we[s] == 1'b1 && s < PIPE_WIDTH) begin
@@ -102,18 +111,26 @@ always_comb begin
     for(int i = 0; i < PIPE_WIDTH; i++) rs_rdy[i] = (total_open_entries > i + 1) ? 1 : 0;
 
     //outputs
-    if(^alu_rdy = 1'b1) begin
-        c1 = ret_exe_candidate(1);
-        indv_alu_rdy[c1] = 1'b1;
-        execute_pkt[alu_rdy - 1] = indv_execute_pkt[c1];
-    end
-    else if(alu_rdy[0] && alu_rdy[1]) begin
-        c1 = ret_exe_candidate(1);
-        c2 = ret_exe_candidate(2);
-        indv_alu_rdy[c1] = 1'b1;
-        indv_alu_rdy[c2] = 1'b1;
-        execute_pkt[0] = indv_execute_pkt[c1];
-        execute_pkt[1] = indv_execute_pkt[c2];
+    c1 = ret_exe_candidate(1);
+    c2 = ret_exe_candidate(2);
+    foreach(execute_pkt[i]) execute_pkt[i] = '0;
+    if(total_ready_entries > 0) begin
+        if(^alu_rdy == 1'b1) begin
+            indv_alu_rdy[c1] = 1'b1;
+            if(alu_rdy[0]) execute_pkt[0] = indv_execute_pkt[c1];
+            else execute_pkt[1] = indv_execute_pkt[c1];  
+        end
+        else if (alu_rdy == 2'b11 && total_ready_entries == 1) begin
+            indv_alu_rdy[c1] = 1'b1;
+            execute_pkt[0] = indv_execute_pkt[c1];
+
+        end
+        else if(alu_rdy == 2'b11) begin
+            indv_alu_rdy[c1] = 1'b1;
+            indv_alu_rdy[c2] = 1'b1;
+            execute_pkt[0] = indv_execute_pkt[c1];
+            execute_pkt[1] = indv_execute_pkt[c2];
+        end
     end
 end
 
