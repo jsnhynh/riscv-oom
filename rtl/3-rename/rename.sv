@@ -112,26 +112,48 @@ module rename (
     assign rob_alloc_req[1] = decoded_insts[1].is_valid;
 
     assign all_gnts_ok = (!decoded_insts[0].is_valid || rob_alloc_gnt[0]) && (!decoded_insts[1].is_valid || rob_alloc_gnt[1]);
-
+    
+    instruction_t renamed_insts_tmp [PIPE_WIDTH-1:0];
     always_comb begin
-        instruction_t renamed_insts_tmp [PIPE_WIDTH-1:0];
-
         // Step 1: Perform initial renaming for both instructions
-        renamed_insts_tmp[0] = rename_inst(decoded_insts[0], rs1_read_ports[0], rs2_read_ports[0], rob_alloc_tags[0], all_gnts_ok);
-        renamed_insts_tmp[1] = rename_inst(decoded_insts[1], rs1_read_ports[1], rs2_read_ports[1], rob_alloc_tags[1], all_gnts_ok);
+        renamed_insts_tmp[0] = rename_inst(decoded_insts[0], rs1_read_ports[0], rs2_read_ports[0], rob_alloc_tags[0], decoded_insts[0].is_valid && all_gnts_ok);
+        renamed_insts_tmp[1] = rename_inst(decoded_insts[1], rs1_read_ports[1], rs2_read_ports[1], rob_alloc_tags[1], decoded_insts[1].is_valid && all_gnts_ok);
 
         // Step 2: Apply intra-group forwards logic for inst 1
-        if (decoded_insts[0].is_valid && rob_alloc_gnt[0] && decoded_insts[0].has_rd && (decoded_insts[1].src_1_a == decoded_insts[0].rd) && (decoded_insts[0].rd != 0)) begin //  inst0's rd == inst1's rs1?
+        if (decoded_insts[0].is_valid && rob_alloc_gnt[0] && decoded_insts[0].has_rd && (decoded_insts[1].src_1_a.tag[$clog2(ARCH_REGS)-1:0] == decoded_insts[0].rd) && (decoded_insts[0].rd != 0)) begin //  inst0's rd == inst1's rs1?
             renamed_insts_tmp[1].src_1_a.is_renamed = 1'b1;
             renamed_insts_tmp[1].src_1_a.tag       = rob_alloc_tags[0];
         end
 
-        if (decoded_insts[0].is_valid && rob_alloc_gnt[0] && decoded_insts[0].has_rd && (decoded_insts[1].src_1_b == decoded_insts[0].rd) && (decoded_insts[0].rd != 0)) begin //  inst0's rd == inst1's rs2?
+        if (decoded_insts[0].is_valid && rob_alloc_gnt[0] && decoded_insts[0].has_rd && (decoded_insts[1].src_1_b.tag[$clog2(ARCH_REGS)-1:0] == decoded_insts[0].rd) && (decoded_insts[0].rd != 0)) begin //  inst0's rd == inst1's rs2?
             renamed_insts_tmp[1].src_1_b.is_renamed = 1'b1;
             renamed_insts_tmp[1].src_1_b.tag        = rob_alloc_tags[0];
         end
 
-        // Step 3: Compaction Logic
+        // Step 3: Pass Through Sources
+        if (decoded_insts[0].src_0_a.tag == decoded_insts[0].src_1_a.tag) begin
+            renamed_insts_tmp[0].src_0_a.data       = renamed_insts_tmp[0].src_1_a.data;
+            renamed_insts_tmp[0].src_0_a.tag        = renamed_insts_tmp[0].src_1_a.tag;
+            renamed_insts_tmp[0].src_0_a.is_renamed = renamed_insts_tmp[0].src_1_a.is_renamed;
+        end
+        if (decoded_insts[0].src_0_b.tag == decoded_insts[0].src_1_b.tag) begin
+            renamed_insts_tmp[0].src_0_b.data       = renamed_insts_tmp[0].src_1_b.data;
+            renamed_insts_tmp[0].src_0_b.tag        = renamed_insts_tmp[0].src_1_b.tag;
+            renamed_insts_tmp[0].src_0_b.is_renamed = renamed_insts_tmp[0].src_1_b.is_renamed;
+        end
+
+        if (decoded_insts[1].src_0_a.tag == decoded_insts[1].src_1_a.tag) begin
+            renamed_insts_tmp[1].src_0_a.data       = renamed_insts_tmp[1].src_1_a.data;
+            renamed_insts_tmp[1].src_0_a.tag        = renamed_insts_tmp[1].src_1_a.tag;
+            renamed_insts_tmp[1].src_0_a.is_renamed = renamed_insts_tmp[1].src_1_a.is_renamed;
+        end
+        if (decoded_insts[1].src_0_b.tag == decoded_insts[1].src_1_b.tag) begin
+            renamed_insts_tmp[1].src_0_b.data       = renamed_insts_tmp[1].src_1_b.data;
+            renamed_insts_tmp[1].src_0_b.tag        = renamed_insts_tmp[1].src_1_b.tag;
+            renamed_insts_tmp[1].src_0_b.is_renamed = renamed_insts_tmp[1].src_1_b.is_renamed;
+        end
+
+        // Step 4: Compaction Logic
         if (!renamed_insts_tmp[0].is_valid && renamed_insts_tmp[1].is_valid) begin
             renamed_insts_next[0] = renamed_insts_tmp[1];
             renamed_insts_next[1] = '{default:'0};
@@ -139,6 +161,7 @@ module rename (
             renamed_insts_next[0] = renamed_insts_tmp[0];
             renamed_insts_next[1] = renamed_insts_tmp[1];
         end
+
     end
 
     // -- Generate Write Ports for PRF --

@@ -1,9 +1,15 @@
 `timescale 1ns/1ps
 
-import riscv_isa_pkg::*;
-import uarch_pkg::*;
-
 module rename_tb;
+    import riscv_isa_pkg::*;
+    import uarch_pkg::*;
+
+    //-------------------------------------------------------------
+    // Test Statistics
+    //-------------------------------------------------------------
+    int tests_passed = 0;
+    int tests_failed = 0;
+    int assertions_checked = 0;
 
     //-------------------------------------------------------------
     // Clock and Reset Generation
@@ -59,6 +65,22 @@ module rename_tb;
     //-------------------------------------------------------------
     // Helper Tasks
     //-------------------------------------------------------------
+    
+    // Task: Check assertion with detailed reporting
+    task automatic check_assertion(
+        input string test_name,
+        input logic condition,
+        input string fail_msg
+    );
+        assertions_checked++;
+        if (condition) begin
+            $display("  [PASS] %s", test_name);
+            tests_passed++;
+        end else begin
+            $display("  [FAIL] %s: %s", test_name, fail_msg);
+            tests_failed++;
+        end
+    endtask
     
     // Task: Initialize all stimulus signals
     task automatic init_signals();
@@ -126,6 +148,8 @@ module rename_tb;
     //-------------------------------------------------------------
     // Test Stimulus
     //-------------------------------------------------------------
+    instruction_t prev_renamed_0;
+    instruction_t prev_renamed_1; 
     initial begin
         $dumpfile("rename_tb.vcd");
         $dumpvars(0, rename_tb);
@@ -142,20 +166,51 @@ module rename_tb;
         $display("[TEST 1] Single Instruction Rename");
         $display("  Sending: ADD x3, x1, x2");
         
-        create_instruction(decoded_insts_i[0], 32'h1000, 5'd3, 5'd1, 5'd2, 1'b1, OPC_ARI_RTYPE);
+        create_instruction(decoded_insts_i[0], 32'h11111111, 5'd3, 5'd1, 5'd2, 1'b1, OPC_ARI_RTYPE);
         decoded_insts_i[1] = '{default:'0};
         
         rob_alloc_gnt_i = 2'b01;  // Grant for inst[0]
         rob_alloc_tags_i[0] = 5'd10;
+
+        @(negedge clk);
+                
+        // Check ROB allocation request
+        check_assertion("ROB alloc request for inst[0]", 
+                       rob_alloc_req_o[0] == 1'b1,
+                       $sformatf("Expected req[0]=1, got %b", rob_alloc_req_o[0]));
         
-        @(posedge clk);
-        $display("  rob_alloc_req = %b", rob_alloc_req_o);
-        $display("  rename_rdy = %b", rename_rdy_o);
+        check_assertion("No ROB alloc request for inst[1]", 
+                       rob_alloc_req_o[1] == 1'b0,
+                       $sformatf("Expected req[1]=0, got %b", rob_alloc_req_o[1]));
         
-        @(posedge clk);
-        $display("  renamed_insts[0].is_valid = %b", renamed_insts_o[0].is_valid);
-        $display("  renamed_insts[0].dest_tag = %d", renamed_insts_o[0].dest_tag);
-        $display("  renamed_insts[0].rd = %d\n", renamed_insts_o[0].rd);
+        check_assertion("Rename ready asserted", 
+                       rename_rdy_o == 1'b1,
+                       $sformatf("Expected rename_rdy=1, got %b", rename_rdy_o));
+
+        @(negedge clk);
+                
+        // Check renamed instruction output
+        check_assertion("Renamed inst[0] is valid", 
+                       renamed_insts_o[0].is_valid == 1'b1,
+                       $sformatf("Expected valid=1, got %b", renamed_insts_o[0].is_valid));
+        
+        check_assertion("Renamed inst[0] dest_tag correct", 
+                       renamed_insts_o[0].dest_tag == 5'd10,
+                       $sformatf("Expected tag=10, got %d", renamed_insts_o[0].dest_tag));
+        
+        check_assertion("Renamed inst[0] rd preserved", 
+                       renamed_insts_o[0].rd == 5'd3,
+                       $sformatf("Expected rd=3, got %d", renamed_insts_o[0].rd));
+        
+        check_assertion("Renamed inst[0] PC preserved", 
+                       renamed_insts_o[0].pc == 32'h11111111,
+                       $sformatf("Expected PC=0x1000, got 0x%h", renamed_insts_o[0].pc));
+        
+        check_assertion("Renamed inst[1] is invalid", 
+                       renamed_insts_o[1].is_valid == 1'b0,
+                       $sformatf("Expected valid=0, got %b", renamed_insts_o[1].is_valid));
+        
+        $display("");
         
         //-------------------------------------------------------------
         // TEST 2: Two Instructions Rename (Both Granted)
@@ -163,22 +218,47 @@ module rename_tb;
         $display("[TEST 2] Two Instructions Rename (Both Granted)");
         $display("  Sending: ADD x5, x1, x2 and SUB x6, x3, x4");
         
-        create_instruction(decoded_insts_i[0], 32'h1004, 5'd5, 5'd1, 5'd2, 1'b1, OPC_ARI_RTYPE);
-        create_instruction(decoded_insts_i[1], 32'h1008, 5'd6, 5'd3, 5'd4, 1'b1, OPC_ARI_RTYPE);
+        create_instruction(decoded_insts_i[0], 32'h33333333, 5'd5, 5'd1, 5'd2, 1'b1, OPC_ARI_RTYPE);
+        create_instruction(decoded_insts_i[1], 32'h44444444, 5'd6, 5'd3, 5'd4, 1'b1, OPC_ARI_RTYPE);
         
         rob_alloc_gnt_i = 2'b11;  // Grant both
         rob_alloc_tags_i[0] = 5'd11;
         rob_alloc_tags_i[1] = 5'd12;
         
-        @(posedge clk);
-        $display("  rob_alloc_req = %b", rob_alloc_req_o);
-        $display("  rename_rdy = %b", rename_rdy_o);
+        @(negedge clk);
         
-        @(posedge clk);
-        $display("  renamed_insts[0].is_valid = %b, dest_tag = %d, rd = %d", 
-                    renamed_insts_o[0].is_valid, renamed_insts_o[0].dest_tag, renamed_insts_o[0].rd);
-        $display("  renamed_insts[1].is_valid = %b, dest_tag = %d, rd = %d\n",
-                    renamed_insts_o[1].is_valid, renamed_insts_o[1].dest_tag, renamed_insts_o[1].rd);
+        check_assertion("Both ROB alloc requests", 
+                       rob_alloc_req_o == 2'b11,
+                       $sformatf("Expected req=11, got %b", rob_alloc_req_o));
+        
+        check_assertion("Rename ready for both", 
+                       rename_rdy_o == 1'b1,
+                       $sformatf("Expected rename_rdy=1, got %b", rename_rdy_o));
+                
+        check_assertion("Both instructions valid", 
+                       (renamed_insts_o[0].is_valid && renamed_insts_o[1].is_valid),
+                       $sformatf("Expected both valid, got [0]=%b [1]=%b", 
+                                renamed_insts_o[0].is_valid, renamed_insts_o[1].is_valid));
+
+        @(negedge clk);
+        
+        check_assertion("Inst[0] dest_tag correct", 
+                       renamed_insts_o[0].dest_tag == 5'd11,
+                       $sformatf("Expected tag=11, got %d", renamed_insts_o[0].dest_tag));
+        
+        check_assertion("Inst[1] dest_tag correct", 
+                       renamed_insts_o[1].dest_tag == 5'd12,
+                       $sformatf("Expected tag=12, got %d", renamed_insts_o[1].dest_tag));
+        
+        check_assertion("Inst[0] rd=5", 
+                       renamed_insts_o[0].rd == 5'd5,
+                       $sformatf("Expected rd=5, got %d", renamed_insts_o[0].rd));
+        
+        check_assertion("Inst[1] rd=6", 
+                       renamed_insts_o[1].rd == 5'd6,
+                       $sformatf("Expected rd=6, got %d", renamed_insts_o[1].rd));
+        
+        $display("");
         
         //-------------------------------------------------------------
         // TEST 3: RAW Dependency (Intra-group Forwarding)
@@ -187,18 +267,29 @@ module rename_tb;
         $display("  Sending: ADD x5, x1, x2 and ADD x6, x5, x4");
         $display("  inst[1].rs1 (x5) matches inst[0].rd (x5)");
         
-        create_instruction(decoded_insts_i[0], 32'h100C, 5'd5, 5'd1, 5'd2, 1'b1, OPC_ARI_RTYPE);
-        create_instruction(decoded_insts_i[1], 32'h1010, 5'd6, 5'd5, 5'd4, 1'b1, OPC_ARI_RTYPE);
+        create_instruction(decoded_insts_i[0], 32'h55555555, 5'd5, 5'd1, 5'd2, 1'b1, OPC_ARI_RTYPE);
+        create_instruction(decoded_insts_i[1], 32'h66666666, 5'd6, 5'd5, 5'd4, 1'b1, OPC_ARI_RTYPE);
         
         rob_alloc_gnt_i = 2'b11;
         rob_alloc_tags_i[0] = 5'd13;
         rob_alloc_tags_i[1] = 5'd14;
         
-        @(posedge clk);
-        @(posedge clk);
-        $display("  renamed_insts[1].src_1_a.is_renamed = %b", renamed_insts_o[1].src_1_a.is_renamed);
-        $display("  renamed_insts[1].src_1_a.tag = %d (should be %d)\n", 
-                    renamed_insts_o[1].src_1_a.tag, rob_alloc_tags_i[0]);
+        @(negedge clk);
+        @(negedge clk);
+        
+        check_assertion("Inst[1] src_1_a marked as renamed", 
+                       renamed_insts_o[1].src_1_a.is_renamed == 1'b1,
+                       $sformatf("Expected is_renamed=1, got %b", renamed_insts_o[1].src_1_a.is_renamed));
+        
+        check_assertion("Inst[1] src_1_a tag forwarded from inst[0]", 
+                       renamed_insts_o[1].src_1_a.tag == 5'd13,
+                       $sformatf("Expected tag=13 (from inst[0]), got %d", renamed_insts_o[1].src_1_a.tag));
+        
+        check_assertion("Inst[1] src_1_b not affected", 
+                       renamed_insts_o[1].src_1_b.tag != 5'd13,
+                       $sformatf("src_1_b should not be forwarded, got tag=%d", renamed_insts_o[1].src_1_b.tag));
+        
+        $display("");
         
         //-------------------------------------------------------------
         // TEST 4: Partial Grant (Only inst[0] granted)
@@ -206,18 +297,32 @@ module rename_tb;
         $display("[TEST 4] Partial Grant - Should Stall");
         $display("  Sending: Two instructions, but only inst[0] gets grant");
         
-        create_instruction(decoded_insts_i[0], 32'h1014, 5'd7, 5'd1, 5'd2, 1'b1, OPC_ARI_RTYPE);
-        create_instruction(decoded_insts_i[1], 32'h1018, 5'd8, 5'd3, 5'd4, 1'b1, OPC_ARI_RTYPE);
+        create_instruction(decoded_insts_i[0], 32'h77777777, 5'd7, 5'd1, 5'd2, 1'b1, OPC_ARI_RTYPE);
+        create_instruction(decoded_insts_i[1], 32'h88888888, 5'd8, 5'd3, 5'd4, 1'b1, OPC_ARI_RTYPE);
         
         rob_alloc_gnt_i = 2'b01;  // Only grant inst[0]
         rob_alloc_tags_i[0] = 5'd15;
         
-        @(posedge clk);
-        $display("  rob_alloc_req = %b", rob_alloc_req_o);
-        $display("  rename_rdy = %b (should be 0 - stalled)", rename_rdy_o);
+        // Save previous output state
+        prev_renamed_0 = renamed_insts_o[0];
+        prev_renamed_1 = renamed_insts_o[1];
         
-        @(posedge clk);
-        $display("  Pipeline should hold previous values (stalled)\n");
+        @(negedge clk);
+        
+        check_assertion("Both ROB requests asserted", 
+                       rob_alloc_req_o == 2'b11,
+                       $sformatf("Expected req=11, got %b", rob_alloc_req_o));
+        
+        check_assertion("Rename NOT ready (stalled)", 
+                       rename_rdy_o == 1'b0,
+                       $sformatf("Expected rename_rdy=0 (stall), got %b", rename_rdy_o));
+                
+        check_assertion("Pipeline held previous inst[0]", 
+                       (renamed_insts_o[0].is_valid == prev_renamed_0.is_valid) &&
+                       (renamed_insts_o[0].dest_tag == prev_renamed_0.dest_tag),
+                       "Pipeline should hold when stalled");
+        
+        $display("");
         
         //-------------------------------------------------------------
         // TEST 5: Grant both after stall
@@ -226,14 +331,26 @@ module rename_tb;
         rob_alloc_gnt_i = 2'b11;  // Now grant both
         rob_alloc_tags_i[1] = 5'd16;
         
-        @(posedge clk);
-        $display("  rename_rdy = %b (should be 1)", rename_rdy_o);
+        @(negedge clk);
         
-        @(posedge clk);
-        $display("  renamed_insts[0].is_valid = %b, dest_tag = %d", 
-                    renamed_insts_o[0].is_valid, renamed_insts_o[0].dest_tag);
-        $display("  renamed_insts[1].is_valid = %b, dest_tag = %d\n",
-                    renamed_insts_o[1].is_valid, renamed_insts_o[1].dest_tag);
+        check_assertion("Rename ready after both grants", 
+                       rename_rdy_o == 1'b1,
+                       $sformatf("Expected rename_rdy=1, got %b", rename_rdy_o));
+                
+        check_assertion("Both instructions now valid", 
+                       renamed_insts_o[0].is_valid && renamed_insts_o[1].is_valid,
+                       $sformatf("Expected both valid, got [0]=%b [1]=%b",
+                                renamed_insts_o[0].is_valid, renamed_insts_o[1].is_valid));
+        
+        check_assertion("Inst[0] has correct tag", 
+                       renamed_insts_o[0].dest_tag == 5'd15,
+                       $sformatf("Expected tag=15, got %d", renamed_insts_o[0].dest_tag));
+        
+        check_assertion("Inst[1] has correct tag", 
+                       renamed_insts_o[1].dest_tag == 5'd16,
+                       $sformatf("Expected tag=16, got %d", renamed_insts_o[1].dest_tag));
+        
+        $display("");
         
         //-------------------------------------------------------------
         // TEST 6: Commit and Read (Verify PRF Update)
@@ -246,21 +363,26 @@ module rename_tb;
         decoded_insts_i[1] = '{default:'0};
         rob_alloc_gnt_i = 2'b00;
         
-        @(posedge clk);
+        @(negedge clk);
         commit_write_ports_i[0].we = 1'b0;
         
         // Now try to read x3
         $display("  Reading x3 in next rename cycle");
-        create_instruction(decoded_insts_i[0], 32'h101C, 5'd9, 5'd3, 5'd0, 1'b1, OPC_ARI_RTYPE);
+        create_instruction(decoded_insts_i[0], 32'h99999999, 5'd9, 5'd3, 5'd0, 1'b1, OPC_ARI_RTYPE);
         rob_alloc_gnt_i = 2'b01;
         rob_alloc_tags_i[0] = 5'd17;
         
-        @(posedge clk);
-        @(posedge clk);
-        $display("  renamed_insts[0].src_1_a.data = 0x%h (should be 0xDEADBEEF)", 
-                    renamed_insts_o[0].src_1_a.data);
-        $display("  renamed_insts[0].src_1_a.is_renamed = %b (should be 0)\n",
-                    renamed_insts_o[0].src_1_a.is_renamed);
+        @(negedge clk);
+        
+        check_assertion("Committed data read correctly", 
+                       renamed_insts_o[0].src_1_a.data == 32'hDEADBEEF,
+                       $sformatf("Expected data=0xDEADBEEF, got 0x%h", renamed_insts_o[0].src_1_a.data));
+        
+        check_assertion("Renamed flag cleared after commit", 
+                       renamed_insts_o[0].src_1_a.is_renamed == 1'b0,
+                       $sformatf("Expected is_renamed=0, got %b", renamed_insts_o[0].src_1_a.is_renamed));
+        
+        $display("");
         
         //-------------------------------------------------------------
         // TEST 7: Flush Test
@@ -268,27 +390,38 @@ module rename_tb;
         $display("[TEST 7] Flush - Clear All Renamed Flags");
         
         // First, rename some registers
-        create_instruction(decoded_insts_i[0], 32'h1020, 5'd10, 5'd1, 5'd2, 1'b1, OPC_ARI_RTYPE);
+        create_instruction(decoded_insts_i[0], 32'hAAAAAAAA, 5'd10, 5'd1, 5'd2, 1'b1, OPC_ARI_RTYPE);
         rob_alloc_gnt_i = 2'b01;
         rob_alloc_tags_i[0] = 5'd18;
         
-        @(posedge clk);
-        @(posedge clk);
+        @(negedge clk);
+        
+        // Verify instruction was renamed
+        check_assertion("Instruction renamed before flush", 
+                       renamed_insts_o[0].is_valid == 1'b1,
+                       "Setup check failed");
         
         // Now flush
         $display("  Asserting flush...");
         flush = 1'b1;
         decoded_insts_i[0] = '{default:'0};
         
-        @(posedge clk);
+        @(negedge clk);
         flush = 1'b0;
         
-        $display("  After flush, all renamed flags should be cleared");
-        $display("  renamed_insts should be invalid\n");
+        $display("After flush, all renamed flags should be cleared");
         
-        @(posedge clk);
-        $display("  renamed_insts[0].is_valid = %b (should be 0)", renamed_insts_o[0].is_valid);
-        $display("  renamed_insts[1].is_valid = %b (should be 0)\n", renamed_insts_o[1].is_valid);
+        @(negedge clk);
+        
+        check_assertion("Pipeline cleared after flush", 
+                       renamed_insts_o[0].is_valid == 1'b0,
+                       $sformatf("Expected valid=0, got %b", renamed_insts_o[0].is_valid));
+        
+        check_assertion("Inst[1] also cleared", 
+                       renamed_insts_o[1].is_valid == 1'b0,
+                       $sformatf("Expected valid=0, got %b", renamed_insts_o[1].is_valid));
+        
+        $display("");
         
         //-------------------------------------------------------------
         // TEST 8: Compaction Test
@@ -297,18 +430,30 @@ module rename_tb;
         $display("  Sending: inst[0] invalid, inst[1] valid");
         
         decoded_insts_i[0] = '{default:'0};  // Invalid
-        create_instruction(decoded_insts_i[1], 32'h1024, 5'd11, 5'd1, 5'd2, 1'b1, OPC_ARI_RTYPE);
+        create_instruction(decoded_insts_i[1], 32'hBBBBBBBB, 5'd11, 5'd1, 5'd2, 1'b1, OPC_ARI_RTYPE);
         
         rob_alloc_gnt_i = 2'b10;  // Grant inst[1]
         rob_alloc_tags_i[1] = 5'd19;
         
-        @(posedge clk);
-        @(posedge clk);
-        $display("  After compaction:");
-        $display("  renamed_insts[0].is_valid = %b (should be 1)", renamed_insts_o[0].is_valid);
-        $display("  renamed_insts[0].dest_tag = %d (should be %d)", 
-                    renamed_insts_o[0].dest_tag, rob_alloc_tags_i[1]);
-        $display("  renamed_insts[1].is_valid = %b (should be 0)\n", renamed_insts_o[1].is_valid);
+        @(negedge clk);
+        
+        check_assertion("After compaction, inst[0] is valid", 
+                       renamed_insts_o[0].is_valid == 1'b1,
+                       $sformatf("Expected valid=1, got %b", renamed_insts_o[0].is_valid));
+        
+        check_assertion("Compacted inst has correct tag", 
+                       renamed_insts_o[0].dest_tag == 5'd19,
+                       $sformatf("Expected tag=19, got %d", renamed_insts_o[0].dest_tag));
+        
+        check_assertion("Compacted inst has correct PC", 
+                       renamed_insts_o[0].pc == 32'hBBBBBBBB,
+                       $sformatf("Expected PC=0x1024, got 0x%h", renamed_insts_o[0].pc));
+        
+        check_assertion("Inst[1] should be invalid after compaction", 
+                       renamed_insts_o[1].is_valid == 1'b0,
+                       $sformatf("Expected valid=0, got %b", renamed_insts_o[1].is_valid));
+        
+        $display("");
         
         //-------------------------------------------------------------
         // End of Tests
@@ -318,6 +463,18 @@ module rename_tb;
         $display("========================================");
         $display("  All Tests Complete!");
         $display("========================================");
+        $display("  Tests Passed:  %0d", tests_passed);
+        $display("  Tests Failed:  %0d", tests_failed);
+        $display("  Total Checks:  %0d", assertions_checked);
+        $display("========================================");
+        
+        if (tests_failed == 0) begin
+            $display("  ✓ ALL TESTS PASSED!");
+        end else begin
+            $display("  ✗ SOME TESTS FAILED!");
+            $fatal(1, "Test failures detected");
+        end
+        
         $finish;
     end
 
