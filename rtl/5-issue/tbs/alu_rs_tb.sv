@@ -109,19 +109,27 @@ task rndm_tst();
 endtask
 
 task single_trasaction();
-
-    #1;
     if(|rs_rdy == 1'b1) begin
         alu_rdy <= 2'b11;
         rs_entry[0] <= gen_random_instr_pkt(5'd8, 5'd8, 2); //tag is 8, renamed
-        rs_we[0] <= 1'b1;
+        rs_entry[1] <= gen_random_instr_pkt(5'd8, 5'd8, 0);
+        rs_we <= 2'b11;
         @(posedge clk);
-        rs_we[0] <= 1'b0;
-        @(posedge clk);
+        rs_we <= 2'b00;
         @(posedge clk);
         cdb_ports[0] <= gen_random_cbd_pkt(5'd8, 5'd8);
         @(posedge clk);
         cdb_ports[0] <= '0;
+        @(posedge clk);
+        rs_entry[0] <= gen_random_instr_pkt(5'd7, 5'd7, 2); //tag is 8, renamed
+        rs_entry[1] <= gen_random_instr_pkt(5'd7, 5'd7, 2);
+        rs_we <= 2'b11;
+        @(posedge clk);
+        rs_entry[0] <= gen_random_instr_pkt(5'd6, 5'd6, 2); //tag is 8, renamed
+        rs_entry[1] <= gen_random_instr_pkt(5'd6, 5'd6, 2);
+        rs_we <= 2'b11;
+        @(posedge clk);
+        @(posedge clk);
         @(posedge clk);
         $finish;
     end
@@ -142,8 +150,8 @@ task cdb_forward();
 endtask
 initial begin
     toggle_rst();
-    rndm_tst();
-    //single_trasaction();
+    //rndm_tst();
+    single_trasaction();
     //cdb_forward();
 end
 
