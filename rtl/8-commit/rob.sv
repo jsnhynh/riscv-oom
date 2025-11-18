@@ -14,7 +14,7 @@
 import riscv_isa_pkg::*;
 import uarch_pkg::*;
 
-module rob (
+module rob #(parameter N = ROB_ENTRIES)(
     // Module I/O
     input  logic clk, rst,
 
@@ -25,7 +25,7 @@ module rob (
     // Ports to Rename (Allocation)
     input  logic [PIPE_WIDTH-1:0]   rob_alloc_req,
     output logic [PIPE_WIDTH-1:0]   rob_alloc_gnt, // Grant for 0, 1, or 2 entries
-    output logic [TAG_WIDTH-1:0]    rob_alloc_tags      [PIPE_WIDTH-1:0],
+    output logic [$clog2(N)-1:0]    rob_alloc_tags      [PIPE_WIDTH-1:0],
     
     // Ports to Rename (Commit)
     output prf_commit_write_port_t  commit_write_ports  [PIPE_WIDTH-1:0],
@@ -39,22 +39,23 @@ module rob (
     input  writeback_packet_t       cdb_ports           [PIPE_WIDTH-1:0],
 
     // Ports to LSQ
-    output logic [TAG_WIDTH-1:0]    commit_store_ids    [PIPE_WIDTH-1:0],
+    output logic [$clog2(N)-1:0]    commit_store_ids    [PIPE_WIDTH-1:0],
     output logic [PIPE_WIDTH-1:0]   commit_store_vals,
 
     // ROB Pointers
-    output logic [TAG_WIDTH-1:0]    rob_head, rob_tail 
+    output logic [$clog2(N)-1:0]    rob_head, rob_tail 
 );
     //-------------------------------------------------------------
     // Internal Storage and Pointers
     //-------------------------------------------------------------
-    rob_entry_t rob_mem       [ROB_ENTRIES-1:0];
-    logic [TAG_WIDTH-1:0] rob_head_next, rob_tail_next;
+    rob_entry_t rob_mem         [N-1:0];
+    rob_entry_t rob_mem_next    [N-1:0];
+    logic [$clog2(N)-1:0] rob_head_next, rob_tail_next;
     assign rob_head_next = rob_head + 1;
     assign rob_tail_next = rob_tail + 1;
 
-    logic [TAG_WIDTH-1:0] reserved_tags [PIPE_WIDTH-1:0];
-    logic [$clog2(ROB_ENTRIES):0] avail_slots;
+    logic [$clog2(N)-1:0] reserved_tags [PIPE_WIDTH-1:0];
+    logic [$clog2(N):0] avail_slots;
     logic [1:0] reserved_cnt;   // # insts reserved this cycle
     logic [1:0] alloc_cnt;      // # insts allocated this cycle
     logic [1:0] commit_cnt;     // # insts commited this cycle
@@ -78,7 +79,7 @@ module rob (
         if (rst || flush) begin
             rob_head    <= 'd0;
             rob_tail    <= 'd0;
-            avail_slots <= ROB_ENTRIES;
+            avail_slots <= N;
             reserved_tags <= '{default:'0};
             alloc_cnt   <= '0;
         end else begin
@@ -96,68 +97,62 @@ module rob (
     function automatic rob_entry_t cdb_snoop (
         input rob_entry_t           curr_entry,
         input writeback_packet_t    wb_packet,
-        input logic [TAG_WIDTH-1:0] entry_tag
+        input logic [$clog2(N)-1:0] entry_tag
     );
         rob_entry_t updated_entry = curr_entry;
         if (wb_packet.is_valid && (wb_packet.dest_tag == entry_tag) && curr_entry.is_valid) begin
             updated_entry.is_ready      = 1'b1;
-            updated_entry.result        = wb_packet.result; // Store raw result
+            updated_entry.result        = wb_packet.result;
             updated_entry.exception     = wb_packet.exception;
         end
         return updated_entry;
     endfunction
 
     //-------------------------------------------------------------
-    // Allocation Logic
+    // ROB Entry Update Logic (Combinational)
     //-------------------------------------------------------------
-    rob_entry_t rob_entries_d [PIPE_WIDTH-1:0];
-    logic [PIPE_WIDTH-1:0] rob_we_d ;
+    always_comb begin
+        // Start with existing values (pass-through by default)
+        rob_mem_next = rob_mem;
+        
+        for (int i = 0; i < N; i++) begin
+            automatic logic [$clog2(N)-1:0] tag = i;
+            
+            // Priority 1: Dispatch writes (using reserved tags from previous cycle)
+            if (rob_we[0] && rob_rdy[0] && (tag == reserved_tags[0])) begin
+                rob_mem_next[i] = rob_entries[0];
+                // Stores are immediately ready (LSQ handles address computation)
+                rob_mem_next[i].is_ready = (rob_entries[0].opcode == OPC_STORE);
+            end
+            if (rob_we[1] && rob_rdy[1] && (tag == reserved_tags[1])) begin
+                rob_mem_next[i] = rob_entries[1];
+                rob_mem_next[i].is_ready = (rob_entries[1].opcode == OPC_STORE);
+            end
 
-    // -------------------------------------------------------------
-    // Dispatch writes + CDB snoop + Commit invalidation (single writer)
-    // -------------------------------------------------------------
-    always_ff @(posedge clk or posedge rst) begin
-        if (rst || flush) begin
-            for (int i = 0; i < ROB_ENTRIES; i++) rob_mem[i] = '{default:'x};//rob_mem[i].is_valid <= 1'b0;
-            rob_entries_d <= '{default:'0};
-            rob_we_d <= '0;
-        end else begin
-            rob_entries_d <= rob_entries;
-            rob_we_d <= rob_we;
+            // Priority 2: CDB snoops (chain from rob_mem_next to allow same-cycle bypass)
+            for (int j = 0; j < PIPE_WIDTH; j++) begin
+                rob_mem_next[i] = cdb_snoop(rob_mem_next[i], cdb_ports[j], tag);
+            end
 
-            for (int t = 0; t < ROB_ENTRIES; t++) begin
-                logic [TAG_WIDTH-1:0] tag = t[TAG_WIDTH-1:0];
-                rob_entry_t tmp = rob_mem[tag];
-
-                // 1) Dispatch writes into previously reserved tags
-                if (rob_we_d[0] && rob_rdy[0] && (tag == reserved_tags[0])) begin
-                    tmp = rob_entries_d[0];
-                    tmp.is_ready = (tmp.opcode == OPC_STORE);
-                end
-                if (rob_we_d[1] && rob_rdy[1] && (tag == reserved_tags[1])) begin
-                    tmp = rob_entries_d[1];
-                    tmp.is_ready = (tmp.opcode == OPC_STORE);
-                end
-
-                // 2) Snoops from all CDB ports
-                for (int i = 0; i < PIPE_WIDTH; i++) begin
-                    tmp = cdb_snoop(tmp, cdb_ports[i], tag);
-                end
-
-                // 3) Invalidate entries that are committing this cycle (head and head+1)
-                if (((rob_head == tag) && (commit_cnt >= 1)) ||
-                    ((rob_head_next == tag) && (commit_cnt >= 2))) begin
-                    //tmp.is_valid = 1'b0;
-                    tmp = '{default:'x};
-                end
-
-                // Single write per entry
-                rob_mem[tag] <= tmp;
+            // Priority 3: Invalidate entries that are committing this cycle
+            if (((rob_head == tag) && (commit_cnt >= 1)) ||
+                ((rob_head_next == tag) && (commit_cnt >= 2))) begin
+                rob_mem_next[i] = '{default:'x};
             end
         end
     end
-
     
+    // Register the next state
+    always_ff @(posedge clk or posedge rst) begin
+        if (rst || flush) begin
+            for (int i = 0; i < N; i++) begin
+                rob_mem[i] <= '{default:'x};
+            end
+        end else begin
+            rob_mem <= rob_mem_next;
+        end
+    end
+
     //-------------------------------------------------------------
     // Commit Logic
     //-------------------------------------------------------------
@@ -166,11 +161,11 @@ module rob (
         logic                       do_commmit;
         logic [CPU_ADDR_BITS-1:0]   redirect_pc;
         prf_commit_write_port_t     prf_commit;
-        logic [TAG_WIDTH-1:0]       commit_store_id;
+        logic [$clog2(N)-1:0]       commit_store_id;
         logic                       commit_store_val;
     } commit_info_t;
 
-    function automatic commit_info_t proc_commit(input logic [TAG_WIDTH-1:0] ptr);
+    function automatic commit_info_t proc_commit(input logic [$clog2(N)-1:0] ptr);
         commit_info_t info = '{default:'0};
         rob_entry_t entry = rob_mem[ptr];
         
@@ -233,7 +228,7 @@ module rob (
             commit_store_ids[0]     = commit_info[0].commit_store_id;
             commit_store_vals[0]    = commit_info[0].commit_store_val;
         end
-        if (commit_info[1].do_commmit) begin
+        if (commit_info[1].do_commmit && commit_info[0].do_commmit) begin
             commit_cnt = 2'd2;
             commit_write_ports[1]   = commit_info[1].prf_commit;
             commit_store_ids[1]     = commit_info[1].commit_store_id;

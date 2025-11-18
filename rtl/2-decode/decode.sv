@@ -18,7 +18,7 @@ module decode (
     output logic                        decode_rdy,
     input  logic [CPU_ADDR_BITS-1:0]    inst_pcs    [PIPE_WIDTH-1:0],
     input  logic [CPU_INST_BITS-1:0]    insts       [PIPE_WIDTH-1:0],
-    input  logic                        inst_val,
+    input  logic                        fetch_val,
 
     // Ports to Rename
     input  logic            rename_rdy,
@@ -64,44 +64,44 @@ module decode (
         d_inst.opcode   = inst[6:0];
         d_inst.funct7   = inst[31:25];
 
-        casez (opcode)  // Instructions are valid if sent from buffer and compliant opcode
+        casez (d_inst.opcode)  // Instructions are valid if sent from buffer and compliant opcode
             OPC_LUI, OPC_AUIPC, OPC_JAL, OPC_JALR, OPC_BRANCH, OPC_LOAD, OPC_STORE, OPC_ARI_ITYPE, OPC_ARI_RTYPE, OPC_CSR:
                         d_inst.is_valid = val;
             default:    d_inst.is_valid = '0;
         endcase
         
-        casez (opcode)
+        casez (d_inst.opcode)
             OPC_LUI, OPC_AUIPC, OPC_JAL, OPC_JALR, OPC_LOAD, OPC_ARI_ITYPE, OPC_ARI_RTYPE:
                         d_inst.has_rd = 1'b1;
             default:    d_inst.has_rd = 1'b0;
         endcase
 
-        casez (opcode)
+        casez (d_inst.opcode)
             OPC_JAL, OPC_JALR: 
                         d_inst.br_taken = 1'b1;
             default:    d_inst.br_taken = 1'b0;
 
         endcase
 
-        casez (opcode)
+        casez (d_inst.opcode)
             OPC_AUIPC, OPC_JAL, OPC_BRANCH: 
                         d_inst.src_0_a.data = pc;   // Use PC as first operand
             default:    d_inst.src_0_a.tag  = rs1;  // Use rs1
         endcase
 
-        casez (opcode)
+        casez (d_inst.opcode)
             OPC_ARI_RTYPE:  
                         d_inst.src_0_b.tag  = rs2;              // Use rs2
             default:    d_inst.src_0_b.data = gen_imm(inst);    // Use immediate
         endcase
 
-        casez (opcode)
+        casez (d_inst.opcode)
             OPC_ARI_RTYPE, OPC_ARI_ITYPE, OPC_LOAD, OPC_STORE:  
                         d_inst.uop_0    = funct3;
             default:    d_inst.uop_0    = FNC_ADD_SUB;
         endcase
 
-        casez (opcode)
+        casez (d_inst.opcode)
             OPC_BRANCH: d_inst.uop_1 = funct3;
             default:    d_inst.uop_1 = '0;
         endcase
@@ -120,8 +120,8 @@ module decode (
     instruction_t decoded_insts_next [PIPE_WIDTH-1:0];
 
     // Call the decoder function for each instruction path
-    assign decoded_insts_next[0] = decode_inst(insts[0], inst_pcs[0], inst_val);
-    assign decoded_insts_next[1] = decode_inst(insts[1], inst_pcs[1], inst_val);
+    assign decoded_insts_next[0] = decode_inst(inst_pcs[0], insts[0], fetch_val);
+    assign decoded_insts_next[1] = decode_inst(inst_pcs[1], insts[1], fetch_val);
     
     //-------------------------------------------------------------
     // Pipeline Register Logic
@@ -131,9 +131,9 @@ module decode (
             decoded_insts[0] <= '{default:'0};
             decoded_insts[1] <= '{default:'0};
         end else if (decode_rdy) begin
-            if (inst_val) begin
+            if (fetch_val) begin
                 decoded_insts[0] <= decoded_insts_next[0];
-                decoded_insts[1] <= decode_inst1_next;
+                decoded_insts[1] <= decoded_insts_next[1];
             end else begin
                 decoded_insts[0] <= '{default:'0};
                 decoded_insts[1] <= '{default:'0};

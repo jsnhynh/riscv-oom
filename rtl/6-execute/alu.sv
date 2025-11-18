@@ -4,11 +4,11 @@ import uarch_pkg::*;
 module alu (
     input  logic clk, rst,
 
-    output logic                alu_rdy;
-    input  instruction_t        alu_packet;
+    output logic                alu_rdy,
+    input  instruction_t        alu_packet,
     
-    output writeback_packet_t   alu_result;
-    input  logic                alu_cdb_gnt;
+    output writeback_packet_t   alu_result,
+    input  logic                alu_cdb_gnt
 );
     instruction_t alu_packet_q;
     writeback_packet_t alu_result_d;
@@ -17,21 +17,20 @@ module alu (
         .d(alu_packet),
         .clk(clk),
         .rst(rst || flush),
-        .ce(!alu_rdy),
+        .ce(!alu_rdy)
     );
     REGISTER_R_CE #(.N($bits(writeback_packet_t))) alu_result_reg_o (
         .q(alu_packet),
         .d(alu_result_d),
         .clk(clk),
         .rst(rst || flush),
-        .ce(!alu_rdy);
+        .ce(!alu_rdy)
     );
 
     logic [CPU_DATA_BITS-1:0] a     = alu_packet_q.src_0_a;
     logic [CPU_DATA_BITS-1:0] b     = alu_packet_q.src_0_b;
     logic [CPU_DATA_BITS-1:0] rs1   = alu_packet_q.src_1_a;
     logic [CPU_DATA_BITS-1:0] rs2   = alu_packet_q.src_1_b;
-    logic [CPU_DATA_BITS-1:0] alu_result_d.result;
 
     logic br_result;
 

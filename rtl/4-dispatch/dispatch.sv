@@ -23,15 +23,18 @@ module dispatch (
     // Ports to RS
     input  logic [PIPE_WIDTH-1:0]   alu_rs_rdy,
     input  logic [PIPE_WIDTH-1:0]   mdu_rs_rdy,
-    input  logic [PIPE_WIDTH-1:0]   lsq_rs_rdy,
+    input  logic [PIPE_WIDTH-1:0]   lsq_ld_rdy,
+    input  logic [PIPE_WIDTH-1:0]   lsq_st_rdy,
 
     output logic [PIPE_WIDTH-1:0]   alu_rs_we,
     output logic [PIPE_WIDTH-1:0]   mdu_rs_we,
-    output logic [PIPE_WIDTH-1:0]   lsq_rs_we,
+    output logic [PIPE_WIDTH-1:0]   lsq_ld_we,
+    output logic [PIPE_WIDTH-1:0]   lsq_st_we,
 
     output instruction_t            alu_rs_entries  [PIPE_WIDTH-1:0],
     output instruction_t            mdu_rs_entries  [PIPE_WIDTH-1:0],
-    output instruction_t            lsq_rs_entries  [PIPE_WIDTH-1:0],
+    output instruction_t            lsq_ld_entries  [PIPE_WIDTH-1:0],
+    output instruction_t            lsq_st_entries  [PIPE_WIDTH-1:0],
 
     // Ports to ROB
     input  logic [PIPE_WIDTH-1:0]   rob_rdy, // 00: 0 rdy, 01: 1 rdy, 10/11: 2+ rdy
@@ -43,54 +46,71 @@ module dispatch (
     // Internal Logic
     //-------------------------------------------------------------
     logic [PIPE_WIDTH-1:0] is_alu;
-    logic [PIPE_WIDTH-1:0] is_lsq;
     logic [PIPE_WIDTH-1:0] is_mdu;
-    logic [PIPE_WIDTH-1:0] can_dispatch ;
+    logic [PIPE_WIDTH-1:0] is_ld;
+    logic [PIPE_WIDTH-1:0] is_st;
+    logic [PIPE_WIDTH-1:0] can_dispatch;
 
     // -- Step 1: Determine the target queue for each instruction --
-    assign is_alu[0] = renamed_insts[0].is_valid && !is_mdu[0] && !is_lsq[0];
-    assign is_lsq[0] = renamed_insts[0].is_valid && ((renamed_insts[0].opcode == OPC_LOAD) || (renamed_insts[0].opcode == OPC_STORE));
-    assign is_mdu[0] = renamed_insts[0].is_valid && ((renamed_insts[0].opcode == OPC_ARI_RTYPE) && (renamed_insts[0].funct7 == FNC7_MULDIV));
+    assign is_alu[0]    = renamed_insts[0].is_valid && !is_mdu[0] && !is_ld[0] && !is_st[0];
+    assign is_ld[0]     = renamed_insts[0].is_valid && (renamed_insts[0].opcode == OPC_LOAD);
+    assign is_st[0]     = renamed_insts[0].is_valid && (renamed_insts[0].opcode == OPC_STORE);
+    assign is_mdu[0]    = renamed_insts[0].is_valid && ((renamed_insts[0].opcode == OPC_ARI_RTYPE) && (renamed_insts[0].funct7 == FNC7_MULDIV));
 
-    assign is_alu[1] = renamed_insts[1].is_valid && !is_mdu[1] && !is_lsq[1];
-    assign is_lsq[1] = renamed_insts[1].is_valid && ((renamed_insts[1].opcode == OPC_LOAD) || (renamed_insts[1].opcode == OPC_STORE));
-    assign is_mdu[1] = renamed_insts[1].is_valid && ((renamed_insts[1].opcode == OPC_ARI_RTYPE) && (renamed_insts[1].funct7 == FNC7_MULDIV));
+    assign is_alu[1]    = renamed_insts[1].is_valid && !is_mdu[1] && !is_ld[1] && !is_st[1];
+    assign is_ld[1]     = renamed_insts[1].is_valid && (renamed_insts[1].opcode == OPC_LOAD);
+    assign is_st[1]     = renamed_insts[1].is_valid && (renamed_insts[1].opcode == OPC_STORE);
+    assign is_mdu[1]    = renamed_insts[1].is_valid && ((renamed_insts[1].opcode == OPC_ARI_RTYPE) && (renamed_insts[1].funct7 == FNC7_MULDIV));
 
     // -- Step 2: Determine if inst 0 can be dispatched -- 
-    assign can_dispatch[0] =  rob_rdy[0] && (
+    assign can_dispatch[0] =    !renamed_insts[0].is_valid || (rob_rdy[0] && (
                                 (is_alu[0] && alu_rs_rdy[0]) || 
                                 (is_mdu[0] && mdu_rs_rdy[0]) || 
-                                (is_lsq[0] && lsq_rs_rdy[0]));
+                                (is_ld[0]  && lsq_ld_rdy[0]) ||
+                                (is_st[0]  && lsq_st_rdy[0])));
 
     // -- Step 3: Determine if inst 1 can be dispatched --
-    logic rob_avail_for_inst1 = (can_dispatch[0])? rob_rdy[1] : rob_rdy[0];
+    logic rob_avail_for_inst1;
     logic rs_avail_for_inst1;
+
+    assign rob_avail_for_inst1 = (renamed_insts[0].is_valid && can_dispatch[0]) ? rob_rdy[1] : rob_rdy[0];
+
     always_comb begin
         rs_avail_for_inst1 = 1'b0;
-        if (is_alu[1]) begin
-            rs_avail_for_inst1 = (is_alu[0] && can_dispatch[0])? alu_rs_rdy[1] : alu_rs_rdy[0];
-        end else if (is_lsq[1]) begin
-            rs_avail_for_inst1 = (is_lsq[0] && can_dispatch[0])? lsq_rs_rdy[1] : lsq_rs_rdy[0];
+        if (!renamed_insts[1].is_valid) begin 
+            rs_avail_for_inst1 = 1'b1;  // No instruction, always available
+        end else if (is_alu[1]) begin
+            rs_avail_for_inst1 = (is_alu[0] && renamed_insts[0].is_valid && can_dispatch[0]) ? alu_rs_rdy[1] : alu_rs_rdy[0];
+        end else if (is_ld[1]) begin
+            rs_avail_for_inst1 = (is_ld[0] && renamed_insts[0].is_valid && can_dispatch[0]) ? lsq_ld_rdy[1] : lsq_ld_rdy[0];
+        end else if (is_st[1]) begin
+            rs_avail_for_inst1 = (is_st[0] && renamed_insts[0].is_valid && can_dispatch[0]) ? lsq_st_rdy[1] : lsq_st_rdy[0];
         end else if (is_mdu[1]) begin
-            rs_avail_for_inst1 = (is_mdu[0] && can_dispatch[0])? mdu_rs_rdy[1] : mdu_rs_rdy[0];
+            rs_avail_for_inst1 = (is_mdu[0] && renamed_insts[0].is_valid && can_dispatch[0]) ? mdu_rs_rdy[1] : mdu_rs_rdy[0];
         end
     end
-    assign can_dispatch[1] = rob_avail_for_inst1 && rs_avail_for_inst1;
+    assign can_dispatch[1] = !renamed_insts[1].is_valid || (rob_avail_for_inst1 && rs_avail_for_inst1);
 
     // -- Step 4: Generate Handshake and Write Enable Signals --
     // Ready to accept from rename if I can dispatch exactly both
-    assign dispatch_rdy = (!renamed_insts[0].is_valid || can_dispatch[0]) && (!renamed_insts[1].is_valid || can_dispatch[1]);
+    assign dispatch_rdy = can_dispatch[0] && can_dispatch[1];
 
-    assign alu_rs_we    = {dispatch_rdy && can_dispatch[1] && is_alu[1], dispatch_rdy && can_dispatch[0] && is_alu[0]};
-    assign lsq_we       = {dispatch_rdy && can_dispatch[1] && is_lsq[1], dispatch_rdy && can_dispatch[0] && is_lsq[0]};
-    assign mdu_rs_we    = {dispatch_rdy && can_dispatch[1] && is_mdu[1], dispatch_rdy && can_dispatch[0] && is_mdu[0]};
-    assign rob_we       = {dispatch_rdy && can_dispatch[1], dispatch_rdy && can_dispatch[0]};
+    assign alu_rs_we    = {dispatch_rdy && renamed_insts[1].is_valid && is_alu[1], dispatch_rdy && renamed_insts[0].is_valid && is_alu[0]};
+    assign lsq_ld_we    = {dispatch_rdy && renamed_insts[1].is_valid && is_ld[1], dispatch_rdy && renamed_insts[0].is_valid && is_ld[0]};
+    assign lsq_st_we    = {dispatch_rdy && renamed_insts[1].is_valid && is_st[1], dispatch_rdy && renamed_insts[0].is_valid && is_st[0]};
+    assign mdu_rs_we    = {dispatch_rdy && renamed_insts[1].is_valid && is_mdu[1], dispatch_rdy && renamed_insts[0].is_valid && is_mdu[0]};
+    assign rob_we       = {dispatch_rdy && renamed_insts[1].is_valid, dispatch_rdy && renamed_insts[0].is_valid};
 
     // -- Step 5: Assign Data to Output Ports --
     assign alu_rs_entries[0] = renamed_insts[0];
     assign alu_rs_entries[1] = renamed_insts[1];
-    assign lsq_rs_entries[0] = renamed_insts[0];
-    assign lsq_rs_entries[1] = renamed_insts[1];
+
+    assign lsq_ld_entries[0] = renamed_insts[0];
+    assign lsq_ld_entries[1] = renamed_insts[1];
+    
+    assign lsq_st_entries[0] = renamed_insts[0];
+    assign lsq_st_entries[1] = renamed_insts[1];
+
     assign mdu_rs_entries[0] = renamed_insts[0];
     assign mdu_rs_entries[1] = renamed_insts[1];
 

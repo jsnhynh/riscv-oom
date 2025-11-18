@@ -32,6 +32,11 @@ module inst_buffer (
   logic [CPU_ADDR_BITS-1:0]             pc_regs         [INST_BUFFER_DEPTH-1:0];
   logic [FETCH_WIDTH*CPU_INST_BITS-1:0] inst_packet_reg [INST_BUFFER_DEPTH-1:0];
 
+  // Holding registers for when decoder stalls
+  logic [CPU_ADDR_BITS-1:0]             inst_pcs_hold;
+  logic [FETCH_WIDTH*CPU_INST_BITS-1:0] insts_hold;
+  logic                                 holding_valid;
+
   logic do_write, do_read;
   assign do_write = imem_rec_val && inst_buffer_rdy && ~flush;
   assign do_read  = decoder_rdy && ~is_empty && ~flush;
@@ -59,13 +64,55 @@ module inst_buffer (
   assign is_empty = (read_ptr == write_ptr);
 
   assign inst_buffer_rdy  = ~is_full;
-  assign fetch_val         = ~is_empty && ~rst && ~flush && decoder_rdy;
 
-  // Read
+  // Combinational read from buffer
   logic [2*CPU_INST_BITS-1:0] read_packet;
+  logic [CPU_ADDR_BITS-1:0]   read_pc;
   assign read_packet = inst_packet_reg[read_ptr];
-  assign insts[0]    = (fetch_val)? read_packet[CPU_INST_BITS-1:0] : '0;
-  assign insts[1]    = (fetch_val)? read_packet[FETCH_WIDTH*CPU_INST_BITS-1:CPU_INST_BITS] : '0;
-  assign inst_pcs[0] = (fetch_val)? pc_regs[read_ptr] : '0;
-  assign inst_pcs[1] = (fetch_val)? pc_regs[read_ptr] + 4 : '0;
+  assign read_pc     = pc_regs[read_ptr];
+
+  // Holding register for decoder stalls
+  // Capture output when we have valid data but decoder is not ready
+  always_ff @(posedge clk or posedge rst) begin
+    if (rst) begin
+      insts_hold      <= '0;
+      inst_pcs_hold   <= '0;
+      holding_valid   <= 1'b0;
+    end else if (flush) begin
+      holding_valid   <= 1'b0;
+    end else if (!decoder_rdy && !is_empty && !holding_valid) begin
+      // Decoder stalled and we have data but haven't captured it yet
+      insts_hold      <= read_packet;
+      inst_pcs_hold   <= read_pc;
+      holding_valid   <= 1'b1;
+    end else if (decoder_rdy && holding_valid) begin
+      // Decoder ready again, release the hold
+      holding_valid   <= 1'b0;
+    end
+  end
+  
+  // Output mux: use holding registers if valid, otherwise direct from buffer
+  always_comb begin
+    if (holding_valid) begin
+      // Use held values during stall
+      insts[0]    = insts_hold[CPU_INST_BITS-1:0];
+      insts[1]    = insts_hold[FETCH_WIDTH*CPU_INST_BITS-1:CPU_INST_BITS];
+      inst_pcs[0] = inst_pcs_hold;
+      inst_pcs[1] = inst_pcs_hold+4;
+      fetch_val   = 1'b1;
+    end else if (!is_empty && !flush) begin
+      // Normal operation: combinational read from buffer
+      insts[0]    = read_packet[CPU_INST_BITS-1:0];
+      insts[1]    = read_packet[FETCH_WIDTH*CPU_INST_BITS-1:CPU_INST_BITS];
+      inst_pcs[0] = read_pc;
+      inst_pcs[1] = read_pc + 4;
+      fetch_val   = 1'b1;
+    end else begin
+      // Empty or flushed
+      insts       = '{default:'0};
+      inst_pcs    = '{default:'0};
+      fetch_val   = 1'b0;
+    end
+  end
+
 endmodule

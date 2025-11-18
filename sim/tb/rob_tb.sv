@@ -4,301 +4,525 @@ import uarch_pkg::*;
 import riscv_isa_pkg::*;
 
 module rob_tb;
+    //=========================================================================
+    // Test Configuration
+    //=========================================================================
+    
+    localparam int TEST_ROB_SIZE = 8;  // Small size for easier testing
+    localparam int TEST_TAG_WIDTH = $clog2(TEST_ROB_SIZE);
 
-    // Use parameters from packages
-    // localparam CLK_PERIOD = 10; // Already defined in uarch_pkg
+    //=========================================================================
+    // Test Infrastructure
+    //=========================================================================
+    
+    int tests_passed = 0;
+    int tests_failed = 0;
+    int total_checks = 0;
+    
+    task check(input string name, input logic condition, input string msg = "");
+        total_checks++;
+        if (condition) begin
+            $display("%0t [PASS] %s", $time, name);
+            tests_passed++;
+        end else begin
+            $display("%0t [FAIL] %s", $time, name);
+            if (msg != "") $display("        %s", msg);
+            tests_failed++;
+        end
+    endtask
 
-    // --- Testbench Signals (DUT Interface) ---
-    logic clk;
-    logic rst;
+    //=========================================================================
+    // DUT Signals
+    //=========================================================================
+    
+    logic clk, rst;
+    
+    // Allocation
+    logic [PIPE_WIDTH-1:0]              alloc_req;
+    logic [PIPE_WIDTH-1:0]              alloc_gnt;
+    logic [TEST_TAG_WIDTH-1:0]          alloc_tags [PIPE_WIDTH-1:0];
+    
+    // Dispatch
+    logic [PIPE_WIDTH-1:0]              rob_rdy;
+    logic [PIPE_WIDTH-1:0]              rob_we;
+    rob_entry_t                         rob_entries [PIPE_WIDTH-1:0];
+    
+    // Writeback
+    writeback_packet_t                  cdb_ports [PIPE_WIDTH-1:0];
+    
+    // Commit
+    logic                               flush;
+    logic [CPU_ADDR_BITS-1:0]           rob_pc;
+    prf_commit_write_port_t             commit_ports [PIPE_WIDTH-1:0];
+    logic [TEST_TAG_WIDTH-1:0]          store_ids [PIPE_WIDTH-1:0];
+    logic [PIPE_WIDTH-1:0]              store_vals;
+    
+    // Debug
+    logic [TEST_TAG_WIDTH-1:0]          head, tail;
+    
+    // Variables for tests (moved out of initial block)
+    logic [TEST_TAG_WIDTH-1:0]          saved_tag0, saved_tag1;
 
-    // --- DUT Outputs (Monitored) ---
-    logic [1:0]              rob_rdy_o;
-    logic                    flush_o;
-    logic [CPU_ADDR_BITS-1:0] rob_pc_o;
-    logic [1:0]              rob_alloc_gnt_o;
-    logic [TAG_WIDTH-1:0]    rob_alloc_tags_o             [PIPE_WIDTH-1:0];
-    prf_commit_write_port_t  commit_write_ports_o   [PIPE_WIDTH-1:0];
-    logic [TAG_WIDTH-1:0]    commit_store_ids_o     [PIPE_WIDTH-1:0];
-    logic [PIPE_WIDTH-1:0]   commit_store_vals_o;
-    logic [TAG_WIDTH-1:0]    rob_head_o, rob_tail_o;
-
-    // --- DUT Inputs (Stimulus) ---
-    logic [1:0]              rob_alloc_req_i;
-    rob_entry_t              rob_entries_i          [PIPE_WIDTH-1:0];
-    logic [1:0]              rob_we_i;  
-    writeback_packet_t       cdb_ports_i            [PIPE_WIDTH-1:0];
-
-    // Instantiate the DUT (Device Under Test)
-    rob dut (
+    //=========================================================================
+    // DUT Instantiation with N=8
+    //=========================================================================
+    
+    rob #(.N(TEST_ROB_SIZE)) dut (
         .clk(clk),
         .rst(rst),
-        .flush(flush_o),
-        .rob_pc(rob_pc_o),
-        .rob_alloc_req(rob_alloc_req_i),
-        .rob_alloc_gnt(rob_alloc_gnt_o),
-        .rob_alloc_tags(rob_alloc_tags_o),
-        .commit_write_ports(commit_write_ports_o),
-        .rob_entries(rob_entries_i),
-        .rob_rdy(rob_rdy_o),
-        .rob_we(rob_we_i),
-        .cdb_ports(cdb_ports_i),
-        .commit_store_ids(commit_store_ids_o),
-        .commit_store_vals(commit_store_vals_o),
-        .rob_head(rob_head_o),
-        .rob_tail(rob_tail_o)
+        .flush(flush),
+        .rob_pc(rob_pc),
+        .rob_alloc_req(alloc_req),
+        .rob_alloc_gnt(alloc_gnt),
+        .rob_alloc_tags(alloc_tags),
+        .rob_rdy(rob_rdy),
+        .rob_we(rob_we),
+        .rob_entries(rob_entries),
+        .cdb_ports(cdb_ports),
+        .commit_write_ports(commit_ports),
+        .commit_store_ids(store_ids),
+        .commit_store_vals(store_vals),
+        .rob_head(head),
+        .rob_tail(tail)
     );
 
+    //=========================================================================
     // Clock Generation
-    always #(CLK_PERIOD/2) clk = ~clk;
-
-    // --- Helper Tasks ---
-    rob_entry_t inst_A, inst_B;    
-
-    // Task to reset the DUT
-    task automatic reset_dut();
-        rst = 1'b1;
-        rob_alloc_req_i = '0;
-        rob_we_i = '0;
-        cdb_ports_i = '{default:'0};
-        repeat(2) @(posedge clk);
-        rst = 1'b0;
-        $display("[%0t] Reset Released.", $time);
-    endtask
-
-    // Task to simulate a CDB Writeback (Execute Stage)
-    task automatic writeback(
-        input logic [TAG_WIDTH-1:0]     tag,
-        input logic [CPU_DATA_BITS-1:0] result,
-        input logic                     exception,
-        input logic                     use_port_1 // 0=CDB0, 1=CDB1
-    );
-        if (use_port_1) begin
-            cdb_ports_i[1].is_valid     = 1'b1;
-            cdb_ports_i[1].dest_tag     = tag;
-            cdb_ports_i[1].result       = result;
-            cdb_ports_i[1].exception    = exception;
-        end else begin
-            cdb_ports_i[0].is_valid     = 1'b1;
-            cdb_ports_i[0].dest_tag     = tag;
-            cdb_ports_i[0].result       = result;
-            cdb_ports_i[0].exception    = exception;
-        end
-    endtask
-
-    task automatic close_writeback;
-            @(posedge clk);
-            cdb_ports_i = '{default: '0};
-    endtask
-
-    // Task to simulate Rename/Dispatch handshake (2 cycles)
-    task automatic dispatch (
-        input rob_entry_t entry0,
-        input rob_entry_t entry1,
-        input logic [1:0] num_to_dispatch // 00, 01, 10, or 11
-    );
-
-        // --- Simulate Rename Stage (Cycle 1) ---
-        rob_alloc_req_i = num_to_dispatch;
-        @(posedge clk); // Wait for ROB to see request and provide grant/tags
-        
-        // Check if ROB granted the request
-        if (num_to_dispatch == 2'b11 && rob_alloc_gnt_o != 2'b11) begin
-            //$fatal(1, "[%0t] ROB failed to grant 2 slots when requested!", $time);
-        end else if (num_to_dispatch > 0 && rob_alloc_gnt_o == 2'b00) begin
-            //$fatal(1, "[%0t] ROB failed to grant 1 slot when requested!", $time);
-        end
-        
-        // --- Simulate Dispatch Stage (Cycle 2) ---
-        rob_alloc_req_i = '0; // De-assert request
-        rob_we_i[0] = (num_to_dispatch[0]) && rob_alloc_gnt_o[0];
-        rob_we_i[1] = (num_to_dispatch[1]) && rob_alloc_gnt_o[1];
-        rob_entries_i[0] = entry0;
-        rob_entries_i[1] = entry1;
-    endtask
-
-    task automatic close_dispatch();
-        @(posedge clk);
-        inst_A = '{default:'0};
-        inst_B = '{default:'0};
-        rob_entries_i = '{default:'0};
-        rob_we_i = '0; // De-assert write
-    endtask
+    //=========================================================================
     
-    function automatic rob_entry_t gen_entry(
+    initial begin
+        clk = 0;
+        forever #(CLK_PERIOD/2) clk = ~clk;
+    end
+
+    //=========================================================================
+    // Helper Tasks
+    //=========================================================================
+    
+    task reset_dut();
+        rst = 1;
+        alloc_req = '0;
+        rob_we = '0;
+        rob_entries = '{default: '0};
+        cdb_ports = '{default: '0};
+        repeat(2) @(posedge clk);
+        rst = 0;
+        @(posedge clk);
+        #1; // Let combinational logic settle
+    endtask
+
+    function automatic rob_entry_t make_entry(
         input logic [CPU_ADDR_BITS-1:0] pc,
         input logic [4:0] rd,
-        input logic [6:0] opcode
+        input logic [6:0] opcode,
+        input logic has_rd = 1'b1
     );
         rob_entry_t entry;
-        entry = '{default:'0};
-        entry.is_valid = 1;
+        entry = '{default: '0};
+        entry.is_valid = 1'b1;
+        entry.is_ready = 1'b0;
         entry.pc = pc;
         entry.rd = rd;
-        entry.has_rd = 1'b1;
+        entry.has_rd = has_rd;
         entry.opcode = opcode;
+        entry.exception = 1'b0;
+        entry.result = '0;
         return entry;
     endfunction
 
+    // 2-cycle allocation and dispatch
+    task allocate_and_dispatch(
+        input rob_entry_t e0,
+        input rob_entry_t e1,
+        input logic [1:0] count  // 01, 10, or 11
+    );
+        // Cycle 1: Request allocation
+        alloc_req = count;
+        @(posedge clk);
+        
+        // Cycle 2: Dispatch with reserved tags
+        alloc_req = '0;
+        if (count[0]) begin
+            rob_we[0] = 1'b1;
+            rob_entries[0] = e0;
+        end
+        if (count[1]) begin
+            rob_we[1] = 1'b1;
+            rob_entries[1] = e1;
+        end
+        @(posedge clk);
+        #1; // Let combinational logic settle
+        
+        // Cycle 3: Clear dispatch signals
+        rob_we = '0;
+        rob_entries = '{default: '0};
+    endtask
 
-    // Main Stimulus
+    task writeback_single(
+        input logic [TEST_TAG_WIDTH-1:0] tag,
+        input logic [CPU_DATA_BITS-1:0] result,
+        input logic exception = 1'b0,
+        input int port = 0
+    );
+        cdb_ports[port].is_valid = 1'b1;
+        cdb_ports[port].dest_tag = tag;
+        cdb_ports[port].result = result;
+        cdb_ports[port].exception = exception;
+        @(posedge clk);
+        #1; // Let combinational logic settle
+        cdb_ports[port] = '{default: '0};
+    endtask
+
+    task writeback_dual(
+        input logic [TEST_TAG_WIDTH-1:0] tag0,
+        input logic [CPU_DATA_BITS-1:0] result0,
+        input logic [TEST_TAG_WIDTH-1:0] tag1,
+        input logic [CPU_DATA_BITS-1:0] result1
+    );
+        cdb_ports[0].is_valid = 1'b1;
+        cdb_ports[0].dest_tag = tag0;
+        cdb_ports[0].result = result0;
+        cdb_ports[0].exception = 1'b0;
+        cdb_ports[1].is_valid = 1'b1;
+        cdb_ports[1].dest_tag = tag1;
+        cdb_ports[1].result = result1;
+        cdb_ports[1].exception = 1'b0;
+        @(posedge clk);
+        #1; // Let combinational logic settle
+        cdb_ports = '{default: '0};
+    endtask
+
+    task wait_cycles(input int n);
+        repeat(n) @(posedge clk);
+        #1; // Let combinational logic settle after last cycle
+    endtask
+
+    //=========================================================================
+    // Test Stimulus
+    //=========================================================================
+    
     initial begin
-        $display("--- ROB Testbench Starting ---");
-        clk = 0;
+        $dumpfile("rob_tb.vcd");
+        $dumpvars(0, rob_tb);
+        
+        // Dump DUT internals
+        for (int i = 0; i < TEST_ROB_SIZE; i++) begin
+            $dumpvars(0, rob_tb.dut.rob_mem[i]);
+            $dumpvars(0, rob_tb.dut.rob_mem_next[i]);
+        end
+        for (int i = 0; i < PIPE_WIDTH; i++) begin
+            $dumpvars(0, rob_tb.dut.reserved_tags[i]);
+        end
+        
+        $display("========================================");
+        $display("  ROB Testbench Started");
+        $display("  ROB_SIZE = %0d", TEST_ROB_SIZE);
+        $display("  PIPE_WIDTH = %0d", PIPE_WIDTH);
+        $display("========================================\n");
+
+        //---------------------------------------------------------------------
+        // TEST 1: Reset and Initial State
+        //---------------------------------------------------------------------
+        $display("[TEST 1] Reset and Initial State");
         reset_dut();
         
-        // --- Test 1: In Order Alloc, OoO Writeback, In Order Commit ---
-        $display("[%0t] Test 1: Allocating 6 instructions...", $time);
-        inst_A = gen_entry(32'h100, 5'd1, OPC_ARI_ITYPE);
-        inst_B = gen_entry(32'h104, 5'd2, OPC_ARI_ITYPE);
-        dispatch(inst_A, inst_B, 2'b11); // Takes 2 cycles
-        inst_A = gen_entry(32'h108, 5'd3, OPC_ARI_ITYPE);
-        inst_B = gen_entry(32'h10c, 5'd4, OPC_ARI_ITYPE);
-        dispatch(inst_A, inst_B, 2'b11); // Takes 2 cycles
-        inst_A = gen_entry(32'h110, 5'd5, OPC_ARI_ITYPE);
-        inst_B = gen_entry(32'h114, 5'd6, OPC_ARI_ITYPE);
-        dispatch(inst_A, inst_B, 2'b11); // Takes 2 cycles
-        close_dispatch();
-        $display("[%0t] Test 1: 6 instructions dispatched. Head: %d, Tail: %d", $time, rob_head_o, rob_tail_o);
+        check("Head at zero", head == 0,
+              $sformatf("Expected: 0, Got: %0d", head));
+        check("Tail at zero", tail == 0,
+              $sformatf("Expected: 0, Got: %0d", tail));
+        check("ROB empty", dut.avail_slots == TEST_ROB_SIZE,
+              $sformatf("Expected: %0d, Got: %0d", TEST_ROB_SIZE, dut.avail_slots));
+        check("No flush on reset", !flush,
+              $sformatf("Expected: 0, Got: %0d", flush));
+        $display("");
 
-        writeback(0, 32'hAAAAAAAA, 1'b0, 0); // Writeback for Tag 0 on CDB0
-        writeback(1, 32'hBBBBBBBB, 1'b0, 1); // Writeback for Tag 1 on CDB1 (in parallel)
-        @(posedge clk); // ROB latches WB results
-        writeback(4, 32'hEEEEEEEE, 1'b0, 1);
-        writeback(5, 32'hFFFFFFFF, 1'b0, 0);
-        @(posedge clk); // ROB latches WB results
-        writeback(2, 32'hCCCCCCCC, 1'b0, 0);
-        writeback(3, 32'hDDDDDDDD, 1'b0, 1);
-        close_writeback(); // ROB latches WB results
-        $display("[%0t] Test 1: Results written back. Waiting for commit...", $time);
-
-        assert(commit_write_ports_o[0].we == 1 && commit_write_ports_o[0].data == 32'hCCCCCCCC);
-        assert(commit_write_ports_o[1].we == 1 && commit_write_ports_o[1].data == 32'hDDDDDDDD);
-        @(posedge clk); // Pointers advance
-        @(posedge clk); // Pointers advance
-        assert(rob_head_o == 6) else $fatal(1, "Head did not advance after commit");
-        assert(rob_rdy_o == 2'b00) else $fatal(1, "ROB did not report 2+ free slots (empty)");
-        $display("[%0t] Test 1: Pointers advanced, ROB is empty. Head: %d, Tail: %d", $time, rob_head_o, rob_tail_o);
-
-        $display("[%0t] Test 1: ---- In Order Alloc, OoO Writeback, In Order Commit PASS ----", $time);
-
-        // --- Test 2: Mispredicted Branch (Predict-Not-Taken) ---
-        $display("[%0t] Test 2: Mispredicted @ isnt0 Branch Test...", $time);
-        inst_A = gen_entry(32'h100, 5'd1, OPC_BRANCH);
-        inst_B = gen_entry(32'h104, 5'd2, OPC_BRANCH);
-        dispatch(inst_A, inst_B, 2'b11);
-        close_dispatch();
-        @(posedge clk);
-        // Branch executes, is TAKEN (mispredict)
-        writeback(6, 32'hAAAA0001, 1'b0, 0);
-        writeback(7, 32'hFFFF0001, 1'b0, 1);
-        close_writeback();
-        // Branch result written back. Waiting for commit/flush
-        assert(flush_o == 1'b1) else $fatal(1, "Flush was not asserted!");
-        assert(rob_pc_o == 32'hAAAA0000) else $fatal(1, "Redirect PC is incorrect!");
-        repeat (2) @(posedge clk); // ROB latches WB result
+        //---------------------------------------------------------------------
+        // TEST 2: Basic Allocation and Commit
+        //---------------------------------------------------------------------
+        $display("[TEST 2] Basic Allocation and Commit");
         
-        $display("[%0t] Test 2: Mispredicted @ inst1 Branch Test...", $time);
-        inst_A = gen_entry(32'h100, 5'd1, OPC_ARI_ITYPE);
-        inst_B = gen_entry(32'h104, 5'd2, OPC_BRANCH);
-        dispatch(inst_A, inst_B, 2'b11);
-        close_dispatch();
+        allocate_and_dispatch(
+            make_entry(32'h00001000, 5'd5, OPC_ARI_ITYPE),
+            make_entry(32'h00001004, 5'd6, OPC_ARI_ITYPE),
+            2'b11
+        );
+        
+        check("Tail advanced by 2", tail == 2,
+              $sformatf("Expected: 2, Got: %0d", tail));
+        check("Available slots decreased", dut.avail_slots == TEST_ROB_SIZE - 2,
+              $sformatf("Expected: %0d, Got: %0d", TEST_ROB_SIZE - 2, dut.avail_slots));
+        
+        // Writeback and commit
+        writeback_dual(3'd0, 32'hDEADBEEF, 3'd1, 32'hCAFEBABE);
+
+        check("Both entries commit (we)", commit_ports[0].we && commit_ports[1].we,
+              $sformatf("Expected: we[0]=1 & we[1]=1, Got: we[0]=%0d & we[1]=%0d",
+                       commit_ports[0].we, commit_ports[1].we));
+        check("Correct data committed", 
+              commit_ports[0].data == 32'hDEADBEEF && commit_ports[1].data == 32'hCAFEBABE,
+              $sformatf("Expected: 0xDEADBEEF & 0xCAFEBABE, Got: 0x%h & 0x%h",
+                       commit_ports[0].data, commit_ports[1].data));
+        
         @(posedge clk);
-        // Commit inst0, inst1 Branch executes, is TAKEN (mispredict)
-        writeback(0, 32'hAAAAAAAA, 1'b0, 1);
-        writeback(1, 32'hFFFF0001, 1'b0, 0);
-        close_writeback();
-        // Branch result written back. Waiting for commit/flush
-        assert(flush_o == 1'b1) else $fatal(1, "Flush was not asserted!");
-        assert(rob_pc_o == 32'hFFFF0000) else $fatal(1, "Redirect PC is incorrect!");
+        #1; // Let combinational logic settle
+        check("Head advanced", head == 2,
+              $sformatf("Expected: 2, Got: %0d", head));
+        check("ROB empty", head == tail,
+              $sformatf("Expected: head==tail, Got: head=%0d tail=%0d", head, tail));
+        $display("");
 
-        $display("[%0t] Test 2: Correct Prediction @ inst1 Branch Test...", $time);
-        inst_A = gen_entry(32'h100, 5'd1, OPC_ARI_ITYPE);
-        inst_B = gen_entry(32'h104, 5'd2, OPC_BRANCH);
-        dispatch(inst_A, inst_B, 2'b11);
-        close_dispatch();
+        //---------------------------------------------------------------------
+        // TEST 3: Out-of-Order Writeback
+        //---------------------------------------------------------------------
+        $display("[TEST 3] Out-of-Order Writeback");
+        reset_dut();
+        
+        // Dispatch 4 instructions
+        allocate_and_dispatch(
+            make_entry(32'h00002000, 5'd1, OPC_ARI_ITYPE),
+            make_entry(32'h00002004, 5'd2, OPC_ARI_ITYPE),
+            2'b11
+        );
+        allocate_and_dispatch(
+            make_entry(32'h00002008, 5'd3, OPC_ARI_ITYPE),
+            make_entry(32'h0000200C, 5'd4, OPC_ARI_ITYPE),
+            2'b11
+        );
+        
+        // Writeback out of order: 3, 2, 1, 0
+        writeback_single(3'd3, 32'h00000003);
+        check("No commit (head not ready)", !commit_ports[0].we,
+              $sformatf("Expected: we=0, Got: we=%0d", commit_ports[0].we));
+        
+        writeback_single(3'd2, 32'h00000002);
+        writeback_single(3'd1, 32'h00000001);
+        writeback_single(3'd0, 32'h00000000);
+        
+        check("Head entries commit", commit_ports[0].we && commit_ports[1].we,
+              $sformatf("Expected: we[0]=1 & we[1]=1, Got: we[0]=%0d & we[1]=%0d",
+                       commit_ports[0].we, commit_ports[1].we));
+        
         @(posedge clk);
-        // Commit inst0, inst1 Branch executes, is TAKEN (mispredict)
-        writeback(0, 32'hAAAAAAAA, 1'b0, 1);
-        writeback(1, 32'hFFFF0000, 1'b0, 0);
-        close_writeback();
-        // Branch result written back. Waiting for commit/flush
-        assert(flush_o == 1'b0) else $fatal(1, "Flush was asserted!");
+        #1; // Let combinational logic settle
+        check("Remaining entries commit", commit_ports[0].we && commit_ports[1].we,
+              $sformatf("Expected: we[0]=1 & we[1]=1, Got: we[0]=%0d & we[1]=%0d",
+                       commit_ports[0].we, commit_ports[1].we));
+        $display("");
 
-        $display("[%0t] Test 2: Jump @ isnt1 Branch Test...", $time);
-        inst_A = gen_entry(32'h100, 5'd1, OPC_BRANCH);
-        inst_B = gen_entry(32'h104, 5'd2, OPC_JAL);
-        dispatch(inst_A, inst_B, 2'b11);
-        close_dispatch();
+        //---------------------------------------------------------------------
+        // TEST 4: Branch Misprediction
+        //---------------------------------------------------------------------
+        $display("[TEST 4] Branch Misprediction");
+        reset_dut();
+        
+        allocate_and_dispatch(
+            make_entry(32'h00003000, 5'd0, OPC_BRANCH, 1'b0),
+            make_entry(32'h00003004, 5'd1, OPC_ARI_ITYPE),
+            2'b11
+        );
+        
+        // Branch taken (mispredicted)
+        writeback_single(3'd0, 32'hDEADBEE1);  // LSB=1
+        
+        check("Flush asserted", flush,
+              $sformatf("Expected: 1, Got: %0d", flush));
+        check("Redirect PC correct", rob_pc == 32'hDEADBEE0,
+              $sformatf("Expected: 0xDEADBEE0, Got: 0x%h", rob_pc));
+        check("Branch doesn't commit", !commit_ports[0].we,
+              $sformatf("Expected: we=0, Got: we=%0d", commit_ports[0].we));
+        
         @(posedge clk);
-        // Jump executes
-        writeback(2, 32'hAAAA0000, 1'b0, 0);
-        writeback(3, 32'hFFFF0000, 1'b0, 1);
-        close_writeback();
-        // Branch result written back. Waiting for commit/flush
-        assert(flush_o == 1'b1) else $fatal(1, "Flush was not asserted!");
-        assert(rob_pc_o == 32'hFFFF0000) else $fatal(1, "Redirect PC is incorrect!");
-        repeat (2) @(posedge clk); // ROB latches WB result
+        #1; // Let combinational logic settle
+        check("ROB flushed", head == 0 && tail == 0,
+              $sformatf("Expected: head=0 & tail=0, Got: head=%0d & tail=%0d", head, tail));
+        $display("");
 
-        $display("[%0t] Test 3: Store", $time);
-        inst_A = gen_entry(32'h100, 5'd1, OPC_STORE);
-        inst_B = gen_entry(32'h104, 5'd2, OPC_STORE);
-        dispatch(inst_A, inst_B, 2'b11);
-        close_dispatch();
-        repeat (5) @(posedge clk);
-        repeat (2) @(posedge clk); // ROB latches WB result
+        //---------------------------------------------------------------------
+        // TEST 5: JAL Instruction
+        //---------------------------------------------------------------------
+        $display("[TEST 5] JAL Instruction");
+        reset_dut();
+        
+        allocate_and_dispatch(
+            make_entry(32'h00004000, 5'd1, OPC_JAL),
+            make_entry(32'h00004004, 5'd2, OPC_ARI_ITYPE),
+            2'b11
+        );
+        
+        writeback_single(3'd0, 32'h00010000);
+        
+        check("JAL flushes", flush,
+              $sformatf("Expected: 1, Got: %0d", flush));
+        check("JAL commits with return address", 
+              commit_ports[0].we && commit_ports[0].data == 32'h00004004,
+              $sformatf("Expected: we=1 & data=0x00004004, Got: we=%0d & data=0x%h",
+                       commit_ports[0].we, commit_ports[0].data));
+        check("Following inst doesn't commit", !commit_ports[1].we,
+              $sformatf("Expected: we=0, Got: we=%0d", commit_ports[1].we));
+        $display("");
 
-        // --- Test 4: ROB Full ---
-        $display("[%0t] Test 1: Allocating MAX instructions...", $time);
-        inst_A = gen_entry(32'h100, 5'd0, OPC_ARI_ITYPE);
-        inst_B = gen_entry(32'h104, 5'd1, OPC_ARI_ITYPE);
-        dispatch(inst_A, inst_B, 2'b11); // Takes 2 cycles
-        inst_A = gen_entry(32'h108, 5'd2, OPC_ARI_ITYPE);
-        inst_B = gen_entry(32'h10c, 5'd3, OPC_ARI_ITYPE);
-        dispatch(inst_A, inst_B, 2'b11); // Takes 2 cycles
-        inst_A = gen_entry(32'h110, 5'd4, OPC_ARI_ITYPE);
-        inst_B = gen_entry(32'h114, 5'd5, OPC_ARI_ITYPE);
-        dispatch(inst_A, inst_B, 2'b11); // Takes 2 cycles
-        inst_A = gen_entry(32'h118, 5'd6, OPC_ARI_ITYPE);
-        inst_B = gen_entry(32'h11C, 5'd7, OPC_ARI_ITYPE);
-        dispatch(inst_A, inst_B, 2'b11); // Takes 2 cycles
-        inst_A = gen_entry(32'h120, 5'd0, OPC_ARI_ITYPE);
-        inst_B = gen_entry(32'h124, 5'd1, OPC_ARI_ITYPE);
-        dispatch(inst_A, inst_B, 2'b11); // Request until able too
-        $display("[%0t] Test 1: MAX instructions dispatched. Head: %d, Tail: %d", $time, rob_head_o, rob_tail_o);
+        //---------------------------------------------------------------------
+        // TEST 6: Store Instructions
+        //---------------------------------------------------------------------
+        $display("[TEST 6] Store Instructions");
+        reset_dut();
+        
+        allocate_and_dispatch(
+            make_entry(32'h00005000, 5'd0, OPC_STORE, 1'b0),
+            make_entry(32'h00005004, 5'd1, OPC_STORE, 1'b0),
+            2'b11
+        );
+                
+        check("Stores immediately ready", 
+              dut.rob_mem[0].is_ready && dut.rob_mem[1].is_ready,
+              $sformatf("Expected: ready[0]=1 & ready[1]=1, Got: ready[0]=%0d & ready[1]=%0d",
+                       dut.rob_mem[0].is_ready, dut.rob_mem[1].is_ready));
+        check("Stores signal to LSQ", store_vals[0] && store_vals[1],
+              $sformatf("Expected: vals=2'b11, Got: vals=2'b%b", store_vals));
+        check("Stores don't write PRF", !commit_ports[0].we && !commit_ports[1].we,
+              $sformatf("Expected: we[0]=0 & we[1]=0, Got: we[0]=%0d & we[1]=%0d",
+                       commit_ports[0].we, commit_ports[1].we));
+        $display("");
 
-        writeback(4, 32'hCCCCCCCC, 1'b0, 0); // Writeback for Tag 0 on CDB0
-        writeback(5, 32'hDDDDDDDD, 1'b0, 1); // Writeback for Tag 1 on CDB1 (in parallel)
-        @(posedge clk); // ROB latches WB results
-        writeback(2, 32'hAAAAAAAA, 1'b0, 0);
-        writeback(3, 32'hBBBBBBBB, 1'b0, 1);
-        @(posedge clk); // ROB latches WB results
-        writeback(6, 32'hEEEEEEEE, 1'b0, 0);
-        writeback(7, 32'hFFFFFFFF, 1'b0, 1);
-        close_writeback(); // ROB latches WB results
-        $display("[%0t] Test 1: Results written back. Waiting for commit...", $time);
-
-        assert(commit_write_ports_o[0].we == 1 && commit_write_ports_o[0].data == 32'hCCCCCCCC);
-        assert(commit_write_ports_o[1].we == 1 && commit_write_ports_o[1].data == 32'hDDDDDDDD);
-        @(posedge clk); // Pointers advance
-        @(posedge clk); // Pointers advance
-        $display("[%0t] Test 1: Pointers advanced, ROB is empty. Head: %d, Tail: %d", $time, rob_head_o, rob_tail_o);
-
-        $display("[%0t] Test 1: ---- In Order Alloc, OoO Writeback, In Order Commit PASS ----", $time);
-
+        //---------------------------------------------------------------------
+        // TEST 7: ROB Full (N=8)
+        //---------------------------------------------------------------------
+        $display("[TEST 7] ROB Full Condition");
+        reset_dut();
+        
+        $display("  Filling ROB (%0d entries)...", TEST_ROB_SIZE);
+        
+        // Fill ROB: 4 pairs = 8 entries
+        for (int i = 0; i < TEST_ROB_SIZE/2; i++) begin
+            allocate_and_dispatch(
+                make_entry(32'h00006000 + i*8, i*2, OPC_ARI_ITYPE),
+                make_entry(32'h00006004 + i*8, i*2+1, OPC_ARI_ITYPE),
+                2'b11
+            );
+        end
+        
+        check("ROB full", dut.avail_slots == 0,
+              $sformatf("Expected: 0, Got: %0d", dut.avail_slots));
+        check("Tail wrapped", tail == 0,
+              $sformatf("Expected: 0, Got: %0d", tail));
+        
+        // Try to allocate when full
+        alloc_req = 2'b11;
         @(posedge clk);
-        $display("--- ROB Testbench Finished Successfully ---");
+        #1; // Let combinational logic settle
+        check("Allocation denied when full", alloc_gnt == 2'b00,
+              $sformatf("Expected: 2'b00, Got: 2'b%b", alloc_gnt));
+        alloc_req = '0;
+        @(posedge clk);
+        #1; // Let combinational logic settle
+        
+        // Free up space
+        writeback_dual(3'd0, 32'h11111111, 3'd1, 32'h22222222);
+        
+        @(posedge clk);
+        #1; // Let combinational logic settle
+        check("Space available after commit", dut.avail_slots == 2,
+              $sformatf("Expected: 2, Got: %0d", dut.avail_slots));
+        
+        // Try again
+        alloc_req = 2'b11;
+        #1; // Let combinational logic settle
+        check("Allocation succeeds", alloc_gnt == 2'b11,
+              $sformatf("Expected: 2'b11, Got: 2'b%b", alloc_gnt));
+        $display("");
+
+        //---------------------------------------------------------------------
+        // TEST 8: Pointer Wraparound
+        //---------------------------------------------------------------------
+        $display("[TEST 8] Pointer Wraparound");
+        reset_dut();
+        
+        $display("  Testing wraparound at boundary...");
+        
+        // Fill and drain multiple times to exercise wraparound
+        for (int cycle = 0; cycle < 2; cycle++) begin
+            // Fill
+            for (int i = 0; i < TEST_ROB_SIZE/2; i++) begin
+                allocate_and_dispatch(
+                    make_entry(32'h00007000 + i*8, (i*2) % 32, OPC_ARI_ITYPE),
+                    make_entry(32'h00007004 + i*8, (i*2+1) % 32, OPC_ARI_ITYPE),
+                    2'b11
+                );
+            end
+            
+            // Drain
+            for (int i = 0; i < TEST_ROB_SIZE/2; i++) begin
+                writeback_dual(i*2, 32'h00000000 + i, i*2+1, 32'h10000000 + i);
+            end
+            
+            wait_cycles(2);
+            check($sformatf("Cycle %0d: ROB empty", cycle), 
+                  head == tail && dut.avail_slots == TEST_ROB_SIZE,
+                  $sformatf("Expected: head==tail & avail=%0d, Got: head=%0d tail=%0d avail=%0d",
+                           TEST_ROB_SIZE, head, tail, dut.avail_slots));
+        end
+        $display("");
+
+        //---------------------------------------------------------------------
+        // TEST 9: CDB Bypass
+        //---------------------------------------------------------------------
+        $display("[TEST 9] CDB Same-Cycle Bypass");
+        reset_dut();
+        
+        alloc_req = 2'b01;
+        @(posedge clk);
+        #1; // Let combinational logic settle
+        
+        // Dispatch and writeback same cycle
+        rob_we[0] = 1'b1;
+        rob_entries[0] = make_entry(32'h00008000, 5'd7, OPC_ARI_ITYPE);
+        cdb_ports[0] = '{
+            is_valid: 1'b1,
+            dest_tag: 3'd0,
+            result: 32'h12345678,
+            exception: 1'b0
+        };
+        @(posedge clk);
+        #1; // Let combinational logic settle
+        
+        check("Bypass worked", dut.rob_mem[0].is_ready,
+              $sformatf("Expected: ready=1, Got: ready=%0d", dut.rob_mem[0].is_ready));
+        check("Correct data", dut.rob_mem[0].result == 32'h12345678,
+              $sformatf("Expected: 0x12345678, Got: 0x%h", dut.rob_mem[0].result));
+        
+        rob_we = '0;
+        cdb_ports = '{default: '0};
+        $display("");
+
+        //---------------------------------------------------------------------
+        // End of Tests
+        //---------------------------------------------------------------------
+        wait_cycles(5);
+        
+        $display("========================================");
+        $display("  All Tests Complete!");
+        $display("========================================");
+        $display("  Checks Passed:  %0d / %0d", tests_passed, total_checks);
+        $display("  Checks Failed:  %0d / %0d", tests_failed, total_checks);
+        $display("========================================");
+        
+        if (tests_failed == 0) begin
+            $display("  ✓ ALL TESTS PASSED!");
+        end else begin
+            $display("  ✗ SOME TESTS FAILED!");
+        end
+        
         $finish;
     end
+
+    //=========================================================================
+    // Timeout Watchdog
+    //=========================================================================
     
-    // Monitor
     initial begin
-        @(negedge rst);
-        #1;
-        $monitor("[%0t] Head: %d, Tail: %d, Avail: %d, Rdy: %b | AllocReq: %b, Gnt: %b | WE: %b | Flush: %b | Cmt0_WE: %b",
-                    $time, rob_head_o, rob_tail_o, dut.avail_slots, rob_rdy_o,
-                    rob_alloc_req_i, rob_alloc_gnt_o, rob_we_i,
-                    flush_o, {commit_write_ports_o[1].we, commit_write_ports_o[0].we});
-        end
+        #100000;
+        $display("\n[ERROR] Testbench timeout!");
+        $finish;
+    end
 
 endmodule
