@@ -120,18 +120,38 @@ always_ff @( posedge clk ) begin
     end
 end
 logic man_flush;
+
+logic ent_val, the_we, both, debug;
+always_ff @( posedge clk ) begin : blockName
+    if (rst) begin
+        ent_val <= 1'b0;
+        the_we <= 1'b0;
+        both <= 1'b0;
+    end
+    else begin
+        ent_val <= rs_entry.is_valid;
+        the_we <= rs_we;
+        both <= debug & !( flush);
+    end
+end
+
 //I THINK THERE IS AN ERROR WITH RS_WRITE_READY BEING ASSIGNED A CYCLE EARLY, WILL UPDATE LATER
 always_comb begin
     rs_write_rdy = 1'b0;
     rs_read_rdy = 1'b0;
     man_flush = 1'b0;
+    debug = 1'b0;
     case (state)
         IDLE : begin
             rs_write_rdy = 1'b1;
              if(rs_entry.is_valid && rs_we) begin
                 next_state = PASS_THRU;
+                debug = 1'b1;
              end
-             else next_state = IDLE;
+             else begin
+                 next_state = IDLE;
+                 debug = 1'b0;
+             end
         end
         PASS_THRU: begin
             if( !execute_pkt.src_0_a.is_renamed &&  

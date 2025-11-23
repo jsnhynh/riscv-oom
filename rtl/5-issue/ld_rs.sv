@@ -1,4 +1,9 @@
-module lsq_rs (
+module lsq_rs
+import riscv_isa_pkg::*; 
+import uarch_pkg::*;
+ #(
+    parameter STQ_DEPTH = 5
+ )(
     input logic clk, rst, flush, cache_stall,
     // Ports from Displatch
     input instruction_t rs_entry,
@@ -30,8 +35,9 @@ module lsq_rs (
     output logic forward_rdy
     
 );
-
-bit base_rs_write_rdy, base_rs_read_rdy, agu_we, alu_re, man_flush, fwd_we;
+instruction_t fwd_entry;
+logic forward_match;
+logic base_rs_write_rdy, base_rs_read_rdy, agu_we, man_flush, fwd_we;
 instruction_t muxed_rs_entry, agu_rs_entry;
 rs rs (
     .clk(clk), 
@@ -79,14 +85,14 @@ state_t state, next_state;
 
 always_ff @( posedge clk ) begin
     if(rst) state <= IDLE;
-    else state <= NEXT_STATE;
+    else state <= next_state;
 end
 
 always_comb begin
     rs_write_rdy = 1'b0;
     rs_read_rdy = 1'b0;
     agu_read_rdy = 1'b0;
-    man_flush = 1'b1; 
+    man_flush = 1'b0; 
     forward_rdy = 1'b0;
     fwd_we = 1'b0;
     case (state)
@@ -137,11 +143,11 @@ always_comb begin
     endcase
 end
 
-logic [$clog2(STQ_DEPTH) : 0] forward_match_indx;
-logic forward_match;
+logic [$clog2(STQ_DEPTH) : 0] forward_match_index;
+//something aint right here
 always_comb begin 
     foreach(store_q[i]) begin
-        if(store_q[i].agu_comp && (store_q[i].src_0_a.data == execute_pkt.src_0_a.data) && store_q[i].agu_comp)begin
+        if(store_q[i].agu_comp && (store_q[i].src_0_a.data == execute_pkt.src_0_a.data) && store_q[i].pc < execute_pkt.pc)begin
              forward_match_index = i;
              forward_match = 1'b1;
              break;
@@ -152,7 +158,7 @@ always_comb begin
         end
     end
     fwd_entry = execute_pkt;
-    fwd_entry.src_0_a = store_q[forward_match_index].src_0_a;
+    fwd_entry.src_0_a = store_q[forward_match_index].src_1_b;
     
     forward_pkt.dest_tag = execute_pkt.dest_tag;
     forward_pkt.exception = 1'b0;
