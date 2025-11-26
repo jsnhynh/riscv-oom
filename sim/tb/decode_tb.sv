@@ -2,7 +2,7 @@
 import riscv_isa_pkg::*;
 import uarch_pkg::*;
 
-module decode_tb_handshake;
+module decode_tb;
 
     //-------------------------------------------------------------
     // Test Statistics
@@ -59,6 +59,9 @@ module decode_tb_handshake;
     //-------------------------------------------------------------
     // Helpers
     //-------------------------------------------------------------
+    instruction_t prev0, prev1;
+    instruction_t hold0, hold1;
+
     task automatic check_assertion(
         input string test_name,
         input logic condition,
@@ -66,10 +69,10 @@ module decode_tb_handshake;
     );
         assertions_checked++;
         if (condition) begin
-            $display("  [PASS] %s", test_name);
+            $display("%0t [PASS] %s", $time, test_name);
             tests_passed++;
         end else begin
-            $display("  [FAIL] %s: %s", test_name, fail_msg);
+            $display("%0t  [FAIL] %s: %s", $time, test_name, fail_msg);
             tests_failed++;
         end
     endtask
@@ -115,8 +118,8 @@ module decode_tb_handshake;
     // Test Stimulus
     //-------------------------------------------------------------
     initial begin
-        $dumpfile("decode_tb_handshake.vcd");
-        $dumpvars(0, decode_tb_handshake);
+        $dumpfile("decode_tb.vcd");
+        $dumpvars(0, decode_tb);
 
         $display("========================================");
         $display("  Decode Handshake + Valid Testbench");
@@ -184,8 +187,8 @@ module decode_tb_handshake;
         @(posedge clk); #1;
 
         // Snapshot current outputs
-        instruction_t prev0 = decoded_o[0];
-        instruction_t prev1 = decoded_o[1];
+        prev0 = decoded_o[0];
+        prev1 = decoded_o[1];
 
         // Change inputs but deassert rename_rdy -> neither slot may advance
         insts_i[0]     = invalid_instr();   // would decode invalid if accepted
@@ -235,7 +238,7 @@ module decode_tb_handshake;
         @(posedge clk); #1;
 
         flush_i = 1'b1; @(posedge clk); #1; flush_i = 1'b0;
-        @(posedge clk); #1;
+        #1;
 
         check_assertion("slot0 invalid after flush",
                         decoded_o[0].is_valid == 1'b0, "");
@@ -254,8 +257,8 @@ module decode_tb_handshake;
 
         // First, stall: rename_rdy=0 → nothing should change
         rename_rdy_i = 1'b0;
-        instruction_t hold0 = decoded_o[0];
-        instruction_t hold1 = decoded_o[1];
+        hold0 = decoded_o[0];
+        hold1 = decoded_o[1];
         @(posedge clk); #1;
 
         check_assertion("decode_rdy=0 when BOTH cannot proceed",

@@ -29,6 +29,7 @@ module alu_tb;
     writeback_packet_t  alu_result_o;
     logic               alu_rdy_o;
     logic               alu_cdb_gnt_i;
+    logic               flush;
 
     //-------------------------------------------------------------
     // DUT Instantiation
@@ -36,6 +37,7 @@ module alu_tb;
     alu dut (
         .clk(clk),
         .rst(rst),
+        .flush(flush),
         .alu_rdy(alu_rdy_o),
         .alu_packet(alu_packet_i),
         .alu_result(alu_result_o),
@@ -46,7 +48,6 @@ module alu_tb;
     // Helper Tasks
     //-------------------------------------------------------------
 
-    // Unified PASS/FAIL counter (same style as your other TBs)
     task automatic check_assertion(
         input string test_name,
         input logic condition,
@@ -54,10 +55,10 @@ module alu_tb;
     );
         assertions_checked++;
         if (condition) begin
-            $display("  [PASS] %s", test_name);
+            $display("%0t  [PASS] %s", $time, test_name);
             tests_passed++;
         end else begin
-            $display("  [FAIL] %s: %s", test_name, fail_msg);
+            $display("%0t  [FAIL] %s: %s", $time,  test_name, fail_msg);
             tests_failed++;
         end
     endtask
@@ -65,6 +66,7 @@ module alu_tb;
     // Reset/init all inputs
     task automatic init_signals();
         rst = 1'b1;
+        flush = 1'b0;
         alu_cdb_gnt_i = 1'b0;
         alu_packet_i  = '{default:'0};
         repeat (2) @(posedge clk);
@@ -73,7 +75,7 @@ module alu_tb;
         #1;
     endtask
 
-    // Build a simple ALU R-type packet (uses src_0_a/ src_0_b .data)
+    // Build a simple ALU R-type packet
     function automatic instruction_t make_alu_rr(
         input logic [CPU_DATA_BITS-1:0] a,
         input logic [CPU_DATA_BITS-1:0] b,
@@ -90,7 +92,7 @@ module alu_tb;
         return t;
     endfunction
 
-    // Build a branch packet (uses src_1_a/ src_1_b .data and uop_1)
+    // Build a branch packet
     function automatic instruction_t make_branch(
         input logic [CPU_DATA_BITS-1:0] rs1,
         input logic [CPU_DATA_BITS-1:0] rs2,
@@ -105,29 +107,26 @@ module alu_tb;
         return t;
     endfunction
 
-    // Drive one op through the DUT with your CE/ready convention
-    // Input captures when alu_cdb_gnt_i == 0 (CE = !alu_rdy)
-    // Output advances and is observed after we raise alu_cdb_gnt_i == 1
+    // Drive one instruction through the 2-stage ALU pipeline
     task automatic drive_and_check(
         input string                       name,
         input instruction_t                pkt,
         input logic [CPU_DATA_BITS-1:0]    expected_result
     );
-        // Present packet
+        // Present packet - hold it stable through the clock edge
         alu_packet_i = pkt;
-
-        // 1) Let input register capture (grant low => alu_rdy=0 => CE=1)
         alu_cdb_gnt_i = 1'b0;
-        @(posedge clk);
-
-        // 2) Advance output path (grant high => alu_rdy=1)
-        alu_cdb_gnt_i = 1'b1;
-        @(posedge clk);
-
-        // 3) Give the output register one cycle to latch
-        @(posedge clk);
-
-        // Check result & valid
+        
+        @(posedge clk);  // Cycle 1: Input register captures
+        #1;  // Wait for capture to complete
+        
+        // Now safe to clear input
+        alu_packet_i = '{default:'0};
+        
+        @(posedge clk);  // Cycle 2: Output register updates with result
+        #1;  // Wait for output to settle
+        
+        // Check result BEFORE granting CDB
         check_assertion($sformatf("%s: result matches", name),
                         alu_result_o.result === expected_result,
                         $sformatf("Got 0x%08h, expected 0x%08h",
@@ -135,10 +134,16 @@ module alu_tb;
         check_assertion($sformatf("%s: valid bit", name),
                         alu_result_o.is_valid === 1'b1,
                         $sformatf("is_valid=%0b (expected 1)", alu_result_o.is_valid));
-
-        // Deassert grant for next op’s input capture
+        
+        // Grant CDB to consume result
+        alu_cdb_gnt_i = 1'b1;
+        @(posedge clk);  // Cycle 3: Result consumed
+        #1;
+        
+        // Clear grant for next instruction
         alu_cdb_gnt_i = 1'b0;
         @(posedge clk);
+        #1;
     endtask
 
     //-------------------------------------------------------------
@@ -177,7 +182,7 @@ module alu_tb;
 
         drive_and_check("XOR",
             make_alu_rr(32'h00FF_00FF, 32'h0F0F_F0F0, FNC_XOR),
-            32'h0FF0_F0FF);
+            32'h0FF0_F00F);                                     
 
         drive_and_check("SLL",
             make_alu_rr(32'h0000_0001, 32'd8, FNC_SLL),
@@ -202,26 +207,22 @@ module alu_tb;
         $display("");
 
         //---------------------------------------------------------
-        // TEST 2: Branch compare results in LSB (per your ALU)
+        // TEST 2: Branch compares
         //---------------------------------------------------------
         $display("[TEST 2] Branch Compares (result LSB is compare)");
 
-        // BEQ true → LSB=1 (upper 31 bits don't matter in your ALU, expect zero there)
         drive_and_check("BEQ true",
             make_branch(32'h1234_5678, 32'h1234_5678, FNC_BEQ),
             {31'b0, 1'b1});
 
-        // BNE false → LSB=0
         drive_and_check("BNE false",
             make_branch(32'hAAAA_0001, 32'hAAAA_0001, FNC_BNE),
             {31'b0, 1'b0});
 
-        // BLT signed: (-1) < (1) → 1
         drive_and_check("BLT true",
             make_branch(32'hFFFF_FFFF, 32'h0000_0001, FNC_BLT),
             {31'b0, 1'b1});
 
-        // BGEU unsigned: (1) >= (0) → 1
         drive_and_check("BGEU true",
             make_branch(32'h0000_0001, 32'h0000_0000, FNC_BGEU),
             {31'b0, 1'b1});
@@ -229,18 +230,43 @@ module alu_tb;
         $display("");
 
         //---------------------------------------------------------
-        // TEST 3: Handshake sanity
+        // TEST 3: Flush functionality
         //---------------------------------------------------------
-        $display("[TEST 3] Handshake Checks");
-        check_assertion("alu_rdy mirrors alu_cdb_gnt (steady high)",
-                        (alu_rdy_o === 1'b1),
-                        $sformatf("alu_rdy=%0b (expected 1) after grant high", alu_rdy_o));
-
-        // Drop grant, rdy should follow (after a clock)
-        alu_cdb_gnt_i = 1'b0; @(posedge clk);
-        check_assertion("alu_rdy mirrors alu_cdb_gnt (steady low)",
-                        (alu_rdy_o === 1'b0),
-                        $sformatf("alu_rdy=%0b (expected 0) after grant low", alu_rdy_o));
+        $display("[TEST 3] Flush");
+        
+        // Load instruction into pipeline
+        alu_packet_i = make_alu_rr(32'h1234_5678, 32'h8765_4321, FNC_ADD_SUB, 7'b0);
+        alu_cdb_gnt_i = 1'b0;
+        @(posedge clk);
+        #1;
+        
+        alu_packet_i = '{default:'0};
+        @(posedge clk);
+        #1;
+        
+        // Verify output is valid before flush
+        check_assertion("Pre-flush: output valid",
+                        alu_result_o.is_valid === 1'b1,
+                        $sformatf("is_valid=%0b (expected 1)", alu_result_o.is_valid));
+        
+        // Assert flush
+        flush = 1'b1;
+        @(posedge clk);
+        #1;
+        
+        flush = 1'b0;
+        @(posedge clk);
+        #1;
+        
+        // Check that flush cleared pipeline
+        check_assertion("Flush clears output",
+                        alu_result_o.is_valid === 1'b0,
+                        $sformatf("is_valid=%0b (expected 0 after flush)", alu_result_o.is_valid));
+        
+        check_assertion("ALU ready after flush",
+                        alu_rdy_o === 1'b1,
+                        $sformatf("alu_rdy=%0b (expected 1 after flush)", alu_rdy_o));
+        
         $display("");
 
         //---------------------------------------------------------

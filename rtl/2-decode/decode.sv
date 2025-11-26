@@ -126,7 +126,7 @@ module decode (
     //-------------------------------------------------------------
     // Pipeline Register Logic
     //-------------------------------------------------------------
-    always_ff @(posedge clk) begin
+    always_ff @(posedge clk or posedge flush) begin
         if (rst || flush) begin
             decoded_insts[0] <= '{default:'0};
             decoded_insts[1] <= '{default:'0};
