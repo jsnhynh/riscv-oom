@@ -43,13 +43,14 @@ module rob #(parameter N = ROB_ENTRIES)(
     output logic [PIPE_WIDTH-1:0]   commit_store_vals,
 
     // ROB Pointers
-    output logic [$clog2(N)-1:0]    rob_head, rob_tail 
+    output logic [$clog2(N)-1:0]    rob_head 
 );
     //-------------------------------------------------------------
     // Internal Storage and Pointers
     //-------------------------------------------------------------
     rob_entry_t rob_mem         [N-1:0];
     rob_entry_t rob_mem_next    [N-1:0];
+    logic [$clog2(N)-1:0] rob_tail;
     logic [$clog2(N)-1:0] rob_head_next, rob_tail_next;
     assign rob_head_next = rob_head + 1;
     assign rob_tail_next = rob_tail + 1;
