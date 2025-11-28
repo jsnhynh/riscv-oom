@@ -35,7 +35,7 @@ module fetch_tb;
     logic [2:0]                 pc_sel_i;
     logic [CPU_ADDR_BITS-1:0]   rob_pc_i;
     logic                       imem_req_rdy_i;
-    logic                       decoder_rdy_i;
+    logic                       decode_rdy_i;
 
     //-------------------------------------------------------------
     // Memory Interface Signals
@@ -94,7 +94,7 @@ module fetch_tb;
         .imem_rec_val(imem_rec_val),
         .imem_rec_packet(imem_rec_packet),
 
-        .decoder_rdy(decoder_rdy_i),
+        .decode_rdy(decode_rdy_i),
         .inst_pcs(inst_pcs_o),
         .insts(insts_o),
         .fetch_val(fetch_val_o)
@@ -154,7 +154,7 @@ module fetch_tb;
         imem_req_rdy_i = 1;
         pc_sel_i = 3'b000;
         rob_pc_i = '0;
-        decoder_rdy_i = 1;
+        decode_rdy_i = 1;
         
         // Cycle 0 (rst=1): imem_req_addr is read (defaults to 0x00000000)
         //                  PC undetermined, IMEM output is 0
@@ -302,7 +302,7 @@ module fetch_tb;
         pc_before_stall = inst_pcs_o[0];
         inst0_before_stall = insts_o[0];
         
-        decoder_rdy_i = 0; // Assert backpressure
+        decode_rdy_i = 0; // Assert backpressure
         
         for (int i = 0; i < 3; i++) begin
             @(posedge clk);
@@ -316,7 +316,7 @@ module fetch_tb;
             $display("    [STALLED] PC held at 0x%h", inst_pcs_o[0]);
         end
         
-        decoder_rdy_i = 1; // Release stall
+        decode_rdy_i = 1; // Release stall
         
         wait_for_fetch(2);
         
@@ -336,13 +336,13 @@ module fetch_tb;
         $display("  Memory stalled, but buffer should drain to decoder...");
         
         // First, ensure buffer has some data
-        decoder_rdy_i = 0;  // Stall decoder to fill buffer
+        decode_rdy_i = 0;  // Stall decoder to fill buffer
         wait_for_fetch(3);
         
         buffer_entries_before = INST_BUFFER_DEPTH - (dut.ib.write_ptr - dut.ib.read_ptr);
         $display("  Buffer has %0d entries before memory stall", buffer_entries_before);
         
-        decoder_rdy_i = 1;  // Resume decoder
+        decode_rdy_i = 1;  // Resume decoder
         imem_req_rdy_i = 0; // Stall memory
         
         cycles_with_valid_output = 0;
@@ -433,7 +433,7 @@ module fetch_tb;
         
         // Scenario 1: Fill buffer (decoder stalled, memory running)
         $display("  Scenario 1: Filling buffer...");
-        decoder_rdy_i = 0;  // Stall decoder
+        decode_rdy_i = 0;  // Stall decoder
         imem_req_rdy_i = 1; // Memory running
         
         wait_for_fetch(INST_BUFFER_DEPTH + 2);
@@ -447,7 +447,7 @@ module fetch_tb;
         
         // Scenario 2: Drain buffer (memory stalled, decoder running)
         $display("  Scenario 2: Draining buffer...");
-        decoder_rdy_i = 1;  // Resume decoder
+        decode_rdy_i = 1;  // Resume decoder
         imem_req_rdy_i = 0; // Stall memory
         
         drain_cycles = 0;
@@ -468,7 +468,7 @@ module fetch_tb;
         
         // Scenario 3: Both running (normal operation)
         $display("  Scenario 3: Normal operation (both running)...");
-        decoder_rdy_i = 1;
+        decode_rdy_i = 1;
         imem_req_rdy_i = 1;
         
         wait_for_fetch(5);
@@ -534,7 +534,7 @@ module fetch_tb;
             pc_before_stall = inst_pcs_o[0];
         end
         
-        decoder_rdy_i = 0; // Stall
+        decode_rdy_i = 0; // Stall
         repeat(2) @(posedge clk);
         
         check_assertion("Output held during decoder stall",
@@ -542,7 +542,7 @@ module fetch_tb;
                        $sformatf("Instruction changed during stall: 0x%h->0x%h", 
                                 inst_before_stall, insts_o[0]));
         
-        decoder_rdy_i = 1; // Resume
+        decode_rdy_i = 1; // Resume
         @(posedge clk);
         
         if (fetch_val_o) begin

@@ -28,7 +28,7 @@ module cdb_tb;
     
     logic [TAG_WIDTH-1:0]       rob_head;
     writeback_packet_t          fu_results  [NUM_SOURCES-1:0];
-    logic                       fu_cdb_gnt  [NUM_SOURCES-1:0];
+    logic                       fu_cdb_gnts  [NUM_SOURCES-1:0];
     writeback_packet_t          cdb_ports   [PIPE_WIDTH-1:0];
 
     //-------------------------------------------------------------
@@ -39,7 +39,7 @@ module cdb_tb;
     ) dut (
         .rob_head(rob_head),
         .fu_results(fu_results),
-        .fu_cdb_gnt(fu_cdb_gnt),
+        .fu_cdb_gnts(fu_cdb_gnts),
         .cdb_ports(cdb_ports)
     );
 
@@ -106,16 +106,16 @@ module cdb_tb;
         
         // Build info message with actual outputs
         info_msg = $sformatf("gnt=[%0d,%0d,%0d,%0d] CDB0={v=%0d,tag=0x%02h,res=0x%08h} CDB1={v=%0d,tag=0x%02h,res=0x%08h}",
-                             fu_cdb_gnt[0], fu_cdb_gnt[1], fu_cdb_gnt[2], fu_cdb_gnt[3],
+                             fu_cdb_gnts[0], fu_cdb_gnts[1], fu_cdb_gnts[2], fu_cdb_gnts[3],
                              cdb_ports[0].is_valid, cdb_ports[0].dest_tag, cdb_ports[0].result,
                              cdb_ports[1].is_valid, cdb_ports[1].dest_tag, cdb_ports[1].result);
         
         // Check grants
         for (int i = 0; i < NUM_SOURCES; i++) begin
-            if (fu_cdb_gnt[i] != expected_grants[i]) begin
+            if (fu_cdb_gnts[i] != expected_grants[i]) begin
                 test_passed = 1'b0;
                 error_msg = $sformatf("%s gnt[%0d]=%0b(exp %0b)", 
-                                      error_msg, i, fu_cdb_gnt[i], expected_grants[i]);
+                                      error_msg, i, fu_cdb_gnts[i], expected_grants[i]);
             end
         end
         

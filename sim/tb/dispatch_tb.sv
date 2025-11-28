@@ -4,6 +4,13 @@ import uarch_pkg::*;
 
 module dispatch_tb;
     
+    //-------------------------------------------------------------
+    // RS Type Indices (matching dispatch module)
+    //-------------------------------------------------------------
+    localparam RS_ALU = 0;
+    localparam RS_LD  = 1;
+    localparam RS_ST  = 2;
+    localparam RS_MDU = 3;
 
     //-------------------------------------------------------------
     // Test Statistics
@@ -25,25 +32,16 @@ module dispatch_tb;
     // Stimulus Signals (inputs to DUT)
     //-------------------------------------------------------------
     instruction_t            renamed_insts_i    [PIPE_WIDTH-1:0];
-    logic [PIPE_WIDTH-1:0]   alu_rs_rdy_i;
-    logic [PIPE_WIDTH-1:0]   mdu_rs_rdy_i;
-    logic [PIPE_WIDTH-1:0]   lsq_ld_rdy_i;
-    logic [PIPE_WIDTH-1:0]   lsq_st_rdy_i;
+    logic [PIPE_WIDTH-1:0]   rs_rdys_i          [NUM_RS-1:0];
     logic [PIPE_WIDTH-1:0]   rob_rdy_i;
 
     //-------------------------------------------------------------
     // Monitored Signals (outputs from DUT)
     //-------------------------------------------------------------
     logic                    dispatch_rdy_o;
-    logic [PIPE_WIDTH-1:0]   alu_rs_we_o;
-    logic [PIPE_WIDTH-1:0]   mdu_rs_we_o;
-    logic [PIPE_WIDTH-1:0]   lsq_ld_we_o;
-    logic [PIPE_WIDTH-1:0]   lsq_st_we_o;
+    logic [PIPE_WIDTH-1:0]   rs_wes_o           [NUM_RS-1:0];
+    instruction_t            rs_issue_ports_o   [NUM_RS-1:0][PIPE_WIDTH-1:0];
     logic [PIPE_WIDTH-1:0]   rob_we_o;
-    instruction_t            alu_rs_entries_o   [PIPE_WIDTH-1:0];
-    instruction_t            mdu_rs_entries_o   [PIPE_WIDTH-1:0];
-    instruction_t            lsq_ld_entries_o   [PIPE_WIDTH-1:0];
-    instruction_t            lsq_st_entries_o   [PIPE_WIDTH-1:0];
     rob_entry_t              rob_entries_o      [PIPE_WIDTH-1:0];
 
     //-------------------------------------------------------------
@@ -53,20 +51,9 @@ module dispatch_tb;
         .dispatch_rdy(dispatch_rdy_o),
         .renamed_insts(renamed_insts_i),
         
-        .alu_rs_rdy(alu_rs_rdy_i),
-        .mdu_rs_rdy(mdu_rs_rdy_i),
-        .lsq_ld_rdy(lsq_ld_rdy_i),
-        .lsq_st_rdy(lsq_st_rdy_i),
-        
-        .alu_rs_we(alu_rs_we_o),
-        .mdu_rs_we(mdu_rs_we_o),
-        .lsq_ld_we(lsq_ld_we_o),
-        .lsq_st_we(lsq_st_we_o),
-        
-        .alu_rs_entries(alu_rs_entries_o),
-        .mdu_rs_entries(mdu_rs_entries_o),
-        .lsq_ld_entries(lsq_ld_entries_o),
-        .lsq_st_entries(lsq_st_entries_o),
+        .rs_rdys(rs_rdys_i),
+        .rs_wes(rs_wes_o),
+        .rs_issue_ports(rs_issue_ports_o),
         
         .rob_rdy(rob_rdy_i),
         .rob_we(rob_we_o),
@@ -98,10 +85,9 @@ module dispatch_tb;
         for (int i = 0; i < PIPE_WIDTH; i++) begin
             renamed_insts_i[i] = '{default:'0};
         end
-        alu_rs_rdy_i = '1;
-        mdu_rs_rdy_i = '1;
-        lsq_ld_rdy_i = '1;
-        lsq_st_rdy_i = '1;
+        for (int i = 0; i < NUM_RS; i++) begin
+            rs_rdys_i[i] = '1;  // All RS ready by default
+        end
         rob_rdy_i = 2'b11;  // Both slots available
         #1;
     endtask
@@ -148,7 +134,7 @@ module dispatch_tb;
         create_renamed_inst(renamed_insts_i[0], 32'h1000, 5'd3, 1'b1, OPC_ARI_RTYPE, 7'b0000000, 5'd10);
         renamed_insts_i[1] = '{default:'0};
         
-        alu_rs_rdy_i = 2'b11;
+        for (int i = 0; i < NUM_RS; i++) rs_rdys_i[i] = 2'b11;
         rob_rdy_i = 2'b11;
         
         #1;
@@ -158,19 +144,19 @@ module dispatch_tb;
                        $sformatf("Expected dispatch_rdy=1, got %b", dispatch_rdy_o));
         
         check_assertion("ALU RS write enable [0]",
-                       alu_rs_we_o[0] == 1'b1,
-                       $sformatf("Expected alu_rs_we[0]=1, got %b", alu_rs_we_o[0]));
+                       rs_wes_o[RS_ALU][0] == 1'b1,
+                       $sformatf("Expected rs_wes[ALU][0]=1, got %b", rs_wes_o[RS_ALU][0]));
         
         check_assertion("No ALU RS write [1]",
-                       alu_rs_we_o[1] == 1'b0,
-                       $sformatf("Expected alu_rs_we[1]=0, got %b", alu_rs_we_o[1]));
+                       rs_wes_o[RS_ALU][1] == 1'b0,
+                       $sformatf("Expected rs_wes[ALU][1]=0, got %b", rs_wes_o[RS_ALU][1]));
         
         check_assertion("ROB write enable [0]",
                        rob_we_o[0] == 1'b1,
                        $sformatf("Expected rob_we[0]=1, got %b", rob_we_o[0]));
         
         check_assertion("No LSQ/MDU writes",
-                       (lsq_ld_we_o == 2'b00) && (lsq_st_we_o == 2'b00) && (mdu_rs_we_o == 2'b00),
+                       (rs_wes_o[RS_LD] == 2'b00) && (rs_wes_o[RS_ST] == 2'b00) && (rs_wes_o[RS_MDU] == 2'b00),
                        "Expected no LSQ or MDU writes");
         
         $display("");
@@ -183,14 +169,14 @@ module dispatch_tb;
         create_renamed_inst(renamed_insts_i[0], 32'h1004, 5'd5, 1'b1, OPC_ARI_RTYPE, 7'b0000000, 5'd11);
         create_renamed_inst(renamed_insts_i[1], 32'h1008, 5'd6, 1'b1, OPC_ARI_ITYPE, 7'b0000000, 5'd12);
         
-        alu_rs_rdy_i = 2'b11;
+        for (int i = 0; i < NUM_RS; i++) rs_rdys_i[i] = 2'b11;
         rob_rdy_i = 2'b11;
         
         #1;
         
         check_assertion("Both ALU writes",
-                       alu_rs_we_o == 2'b11,
-                       $sformatf("Expected alu_rs_we=11, got %b", alu_rs_we_o));
+                       rs_wes_o[RS_ALU] == 2'b11,
+                       $sformatf("Expected rs_wes[ALU]=11, got %b", rs_wes_o[RS_ALU]));
         
         check_assertion("Both ROB writes",
                        rob_we_o == 2'b11,
@@ -206,18 +192,18 @@ module dispatch_tb;
         create_renamed_inst(renamed_insts_i[0], 32'h100C, 5'd7, 1'b1, OPC_LOAD, 7'b0000000, 5'd13);
         renamed_insts_i[1] = '{default:'0};
         
-        lsq_ld_rdy_i = 2'b11;
+        for (int i = 0; i < NUM_RS; i++) rs_rdys_i[i] = 2'b11;
         rob_rdy_i = 2'b11;
         
         #1;
         
         check_assertion("LSQ LD write enable",
-                       lsq_ld_we_o[0] == 1'b1,
-                       $sformatf("Expected lsq_ld_we[0]=1, got %b", lsq_ld_we_o[0]));
+                       rs_wes_o[RS_LD][0] == 1'b1,
+                       $sformatf("Expected rs_wes[LD][0]=1, got %b", rs_wes_o[RS_LD][0]));
         
         check_assertion("No ALU write",
-                       alu_rs_we_o == 2'b00,
-                       $sformatf("Expected alu_rs_we=00, got %b", alu_rs_we_o));
+                       rs_wes_o[RS_ALU] == 2'b00,
+                       $sformatf("Expected rs_wes[ALU]=00, got %b", rs_wes_o[RS_ALU]));
         
         $display("");
         
@@ -229,14 +215,14 @@ module dispatch_tb;
         create_renamed_inst(renamed_insts_i[0], 32'h1010, 5'd0, 1'b0, OPC_STORE, 7'b0000000, 5'd14);
         renamed_insts_i[1] = '{default:'0};
         
-        lsq_st_rdy_i = 2'b11;
+        for (int i = 0; i < NUM_RS; i++) rs_rdys_i[i] = 2'b11;
         rob_rdy_i = 2'b11;
         
         #1;
         
         check_assertion("LSQ ST write enable",
-                       lsq_st_we_o[0] == 1'b1,
-                       $sformatf("Expected lsq_st_we[0]=1, got %b", lsq_st_we_o[0]));
+                       rs_wes_o[RS_ST][0] == 1'b1,
+                       $sformatf("Expected rs_wes[ST][0]=1, got %b", rs_wes_o[RS_ST][0]));
         
         check_assertion("ROB entry has_rd=0 for store",
                        rob_entries_o[0].has_rd == 1'b0,
@@ -252,18 +238,18 @@ module dispatch_tb;
         create_renamed_inst(renamed_insts_i[0], 32'h1014, 5'd8, 1'b1, OPC_ARI_RTYPE, FNC7_MULDIV, 5'd15);
         renamed_insts_i[1] = '{default:'0};
         
-        mdu_rs_rdy_i = 2'b11;
+        for (int i = 0; i < NUM_RS; i++) rs_rdys_i[i] = 2'b11;
         rob_rdy_i = 2'b11;
         
         #1;
         
         check_assertion("MDU RS write enable",
-                       mdu_rs_we_o[0] == 1'b1,
-                       $sformatf("Expected mdu_rs_we[0]=1, got %b", mdu_rs_we_o[0]));
+                       rs_wes_o[RS_MDU][0] == 1'b1,
+                       $sformatf("Expected rs_wes[MDU][0]=1, got %b", rs_wes_o[RS_MDU][0]));
         
         check_assertion("No ALU write for MDU",
-                       alu_rs_we_o == 2'b00,
-                       $sformatf("Expected alu_rs_we=00, got %b", alu_rs_we_o));
+                       rs_wes_o[RS_ALU] == 2'b00,
+                       $sformatf("Expected rs_wes[ALU]=00, got %b", rs_wes_o[RS_ALU]));
         
         $display("");
         
@@ -275,19 +261,18 @@ module dispatch_tb;
         create_renamed_inst(renamed_insts_i[0], 32'h1018, 5'd9, 1'b1, OPC_ARI_RTYPE, 7'b0000000, 5'd16);
         create_renamed_inst(renamed_insts_i[1], 32'h101C, 5'd10, 1'b1, OPC_LOAD, 7'b0000000, 5'd17);
         
-        alu_rs_rdy_i = 2'b11;
-        lsq_ld_rdy_i = 2'b11;
+        for (int i = 0; i < NUM_RS; i++) rs_rdys_i[i] = 2'b11;
         rob_rdy_i = 2'b11;
         
         #1;
         
         check_assertion("ALU write for inst[0]",
-                       alu_rs_we_o[0] == 1'b1,
-                       $sformatf("Expected alu_rs_we[0]=1, got %b", alu_rs_we_o[0]));
+                       rs_wes_o[RS_ALU][0] == 1'b1,
+                       $sformatf("Expected rs_wes[ALU][0]=1, got %b", rs_wes_o[RS_ALU][0]));
         
         check_assertion("LSQ LD write for inst[1]",
-                       lsq_ld_we_o[1] == 1'b1,
-                       $sformatf("Expected lsq_ld_we[1]=1, got %b", lsq_ld_we_o[1]));
+                       rs_wes_o[RS_LD][1] == 1'b1,
+                       $sformatf("Expected rs_wes[LD][1]=1, got %b", rs_wes_o[RS_LD][1]));
         
         check_assertion("Both ROB writes",
                        rob_we_o == 2'b11,
@@ -304,7 +289,10 @@ module dispatch_tb;
         create_renamed_inst(renamed_insts_i[0], 32'h1020, 5'd11, 1'b1, OPC_ARI_RTYPE, 7'b0000000, 5'd18);
         create_renamed_inst(renamed_insts_i[1], 32'h1024, 5'd12, 1'b1, OPC_ARI_RTYPE, 7'b0000000, 5'd19);
         
-        alu_rs_rdy_i = 2'b01;  // Only slot[0] available
+        rs_rdys_i[RS_ALU] = 2'b01;  // Only slot[0] available
+        rs_rdys_i[RS_LD]  = 2'b11;
+        rs_rdys_i[RS_ST]  = 2'b11;
+        rs_rdys_i[RS_MDU] = 2'b11;
         rob_rdy_i = 2'b11;
         
         #1;
@@ -314,7 +302,7 @@ module dispatch_tb;
                        $sformatf("Expected dispatch_rdy=0 (stall), got %b", dispatch_rdy_o));
         
         check_assertion("No writes during stall",
-                       (alu_rs_we_o == 2'b00) && (rob_we_o == 2'b00),
+                       (rs_wes_o[RS_ALU] == 2'b00) && (rob_we_o == 2'b00),
                        "Expected no writes during stall");
         
         $display("");
@@ -327,7 +315,7 @@ module dispatch_tb;
         create_renamed_inst(renamed_insts_i[0], 32'h1028, 5'd13, 1'b1, OPC_ARI_RTYPE, 7'b0000000, 5'd20);
         create_renamed_inst(renamed_insts_i[1], 32'h102C, 5'd14, 1'b1, OPC_ARI_RTYPE, 7'b0000000, 5'd21);
         
-        alu_rs_rdy_i = 2'b11;
+        for (int i = 0; i < NUM_RS; i++) rs_rdys_i[i] = 2'b11;
         rob_rdy_i = 2'b01;  // Only 1 ROB slot available
         
         #1;
@@ -346,7 +334,7 @@ module dispatch_tb;
         renamed_insts_i[0] = '{default:'0};
         renamed_insts_i[1] = '{default:'0};
         
-        alu_rs_rdy_i = 2'b11;
+        for (int i = 0; i < NUM_RS; i++) rs_rdys_i[i] = 2'b11;
         rob_rdy_i = 2'b11;
         
         #1;
@@ -356,8 +344,8 @@ module dispatch_tb;
                        $sformatf("Expected dispatch_rdy=1, got %b", dispatch_rdy_o));
         
         check_assertion("No writes for invalid insts",
-                       (alu_rs_we_o == 2'b00) && (rob_we_o == 2'b00) && 
-                       (lsq_ld_we_o == 2'b00) && (lsq_st_we_o == 2'b00) && (mdu_rs_we_o == 2'b00),
+                       (rs_wes_o[RS_ALU] == 2'b00) && (rob_we_o == 2'b00) && 
+                       (rs_wes_o[RS_LD] == 2'b00) && (rs_wes_o[RS_ST] == 2'b00) && (rs_wes_o[RS_MDU] == 2'b00),
                        "Expected no writes");
         
         $display("");
@@ -371,7 +359,7 @@ module dispatch_tb;
         create_renamed_inst(renamed_insts_i[0], 32'h1030, 5'd15, 1'b1, OPC_ARI_RTYPE, 7'b0000000, 5'd22);
         create_renamed_inst(renamed_insts_i[1], 32'h1034, 5'd16, 1'b1, OPC_ARI_ITYPE, 7'b0000000, 5'd23);
         
-        alu_rs_rdy_i = 2'b11;  // Both slots available
+        for (int i = 0; i < NUM_RS; i++) rs_rdys_i[i] = 2'b11;
         rob_rdy_i = 2'b11;
         
         #1;
@@ -381,8 +369,8 @@ module dispatch_tb;
                        $sformatf("Expected dispatch_rdy=1, got %b", dispatch_rdy_o));
         
         check_assertion("ALU writes to both slots",
-                       alu_rs_we_o == 2'b11,
-                       $sformatf("Expected alu_rs_we=11, got %b", alu_rs_we_o));
+                       rs_wes_o[RS_ALU] == 2'b11,
+                       $sformatf("Expected rs_wes[ALU]=11, got %b", rs_wes_o[RS_ALU]));
         
         $display("");
         

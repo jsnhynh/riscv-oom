@@ -21,16 +21,16 @@ module inst_buffer (
   output logic                          inst_buffer_rdy,
 
   // Port to Decoder
-  input  logic decoder_rdy,
+  input  logic decode_rdy,
   output logic [CPU_ADDR_BITS-1:0]      inst_pcs        [PIPE_WIDTH-1:0],
   output logic [CPU_INST_BITS-1:0]      insts           [PIPE_WIDTH-1:0],
   output logic                          fetch_val
 );
-  logic [$clog2(INST_BUFFER_DEPTH)-1:0] read_ptr, write_ptr;
+  logic [$clog2(INST_BUF_DEPTH)-1:0] read_ptr, write_ptr;
   logic is_full, is_empty;
 
-  logic [CPU_ADDR_BITS-1:0]             pc_regs         [INST_BUFFER_DEPTH-1:0];
-  logic [FETCH_WIDTH*CPU_INST_BITS-1:0] inst_packet_reg [INST_BUFFER_DEPTH-1:0];
+  logic [CPU_ADDR_BITS-1:0]             pc_regs         [INST_BUF_DEPTH-1:0];
+  logic [FETCH_WIDTH*CPU_INST_BITS-1:0] inst_packet_reg [INST_BUF_DEPTH-1:0];
 
   // Holding registers for when decoder stalls
   logic [CPU_ADDR_BITS-1:0]             inst_pcs_hold;
@@ -39,7 +39,7 @@ module inst_buffer (
 
   logic do_write, do_read;
   assign do_write = imem_rec_val && inst_buffer_rdy && ~flush;
-  assign do_read  = decoder_rdy && ~is_empty && ~flush;
+  assign do_read  = decode_rdy && ~is_empty && ~flush;
 
   always_ff @(posedge clk or posedge rst or posedge flush) begin
     if (rst || flush) begin
@@ -80,12 +80,12 @@ module inst_buffer (
       holding_valid   <= 1'b0;
     end else if (flush) begin
       holding_valid   <= 1'b0;
-    end else if (!decoder_rdy && !is_empty && !holding_valid) begin
+    end else if (!decode_rdy && !is_empty && !holding_valid) begin
       // Decoder stalled and we have data but haven't captured it yet
       insts_hold      <= read_packet;
       inst_pcs_hold   <= read_pc;
       holding_valid   <= 1'b1;
-    end else if (decoder_rdy && holding_valid) begin
+    end else if (decode_rdy && holding_valid) begin
       // Decoder ready again, release the hold
       holding_valid   <= 1'b0;
     end

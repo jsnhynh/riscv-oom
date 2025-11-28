@@ -27,7 +27,7 @@ module fetch (
     input  logic [FETCH_WIDTH*CPU_INST_BITS-1:0]    imem_rec_packet,
 
     // Ports to Decoder
-    input  logic                        decoder_rdy,
+    input  logic                        decode_rdy,
     output logic [CPU_ADDR_BITS-1:0]    inst_pcs    [PIPE_WIDTH-1:0],
     output logic [CPU_INST_BITS-1:0]    insts       [PIPE_WIDTH-1:0],
     output logic                        fetch_val
@@ -53,7 +53,7 @@ module fetch (
         .imem_rec_packet(imem_rec_packet),
         .imem_rec_val(imem_rec_val),
         
-        .decoder_rdy(decoder_rdy),
+        .decode_rdy(decode_rdy),
         .inst_pcs(inst_pcs),
         .insts(insts),
         .fetch_val(fetch_val)

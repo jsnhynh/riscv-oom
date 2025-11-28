@@ -8,6 +8,7 @@
     By default, a simple memory model is 
     configured comprised of registers.
 */
+import riscv_isa_pkg::*;
 import uarch_pkg::*;
 
 module cpu #(parameter SIMPLE_MEM_MODE = 1) (input clk, rst);

@@ -23,9 +23,25 @@ package uarch_pkg;
     localparam ALU_RS_ENTRIES   = 8;
     localparam MDU_RS_ENTRIES   = 4;
     localparam LSQ_ENTRIES      = 8;
-    localparam INST_BUFFER_DEPTH = 4;
+    localparam INST_BUF_DEPTH   = 4;
 
     localparam TAG_WIDTH        = $clog2(ROB_ENTRIES);
+
+    localparam NUM_RS           = 4;        // Number of RS's
+    /*  RS ID MAPPING
+        0: ALU_RS
+        1: LSQ_LD
+        2: LSQ_ST
+        3: MDU_RS
+    */
+    localparam NUM_FU           = 5;        // Number of FU's
+    /* FU ID MAPPING
+        0: ALU_0
+        1: ALU_1
+        2: MEM
+        3: AGU
+        4: MDU 
+    */
 
     /*
         The following structs is used to pass decoded instructions down the pipeline to the FU

@@ -21,20 +21,9 @@ module dispatch (
     input  instruction_t            renamed_insts   [PIPE_WIDTH-1:0],
 
     // Ports to RS
-    input  logic [PIPE_WIDTH-1:0]   alu_rs_rdy,
-    input  logic [PIPE_WIDTH-1:0]   mdu_rs_rdy,
-    input  logic [PIPE_WIDTH-1:0]   lsq_ld_rdy,
-    input  logic [PIPE_WIDTH-1:0]   lsq_st_rdy,
-
-    output logic [PIPE_WIDTH-1:0]   alu_rs_we,
-    output logic [PIPE_WIDTH-1:0]   mdu_rs_we,
-    output logic [PIPE_WIDTH-1:0]   lsq_ld_we,
-    output logic [PIPE_WIDTH-1:0]   lsq_st_we,
-
-    output instruction_t            alu_rs_entries  [PIPE_WIDTH-1:0],
-    output instruction_t            mdu_rs_entries  [PIPE_WIDTH-1:0],
-    output instruction_t            lsq_ld_entries  [PIPE_WIDTH-1:0],
-    output instruction_t            lsq_st_entries  [PIPE_WIDTH-1:0],
+    input  logic [PIPE_WIDTH-1:0]   rs_rdys         [NUM_RS-1:0],
+    output logic [PIPE_WIDTH-1:0]   rs_wes          [NUM_RS-1:0],
+    output instruction_t            rs_issue_ports  [NUM_RS-1:0][PIPE_WIDTH-1:0],
 
     // Ports to ROB
     input  logic [PIPE_WIDTH-1:0]   rob_rdy, // 00: 0 rdy, 01: 1 rdy, 10/11: 2+ rdy
@@ -64,10 +53,10 @@ module dispatch (
 
     // -- Step 2: Determine if inst 0 can be dispatched -- 
     assign can_dispatch[0] =    !renamed_insts[0].is_valid || (rob_rdy[0] && (
-                                (is_alu[0] && alu_rs_rdy[0]) || 
-                                (is_mdu[0] && mdu_rs_rdy[0]) || 
-                                (is_ld[0]  && lsq_ld_rdy[0]) ||
-                                (is_st[0]  && lsq_st_rdy[0])));
+                                (is_alu[0] && rs_rdys[0][0]) || 
+                                (is_ld[0]  && rs_rdys[1][0]) ||
+                                (is_st[0]  && rs_rdys[2][0]) ||
+                                (is_mdu[0] && rs_rdys[3][0])));
 
     // -- Step 3: Determine if inst 1 can be dispatched --
     logic rob_avail_for_inst1;
@@ -80,13 +69,13 @@ module dispatch (
         if (!renamed_insts[1].is_valid) begin 
             rs_avail_for_inst1 = 1'b1;  // No instruction, always available
         end else if (is_alu[1]) begin
-            rs_avail_for_inst1 = (is_alu[0] && renamed_insts[0].is_valid && can_dispatch[0]) ? alu_rs_rdy[1] : alu_rs_rdy[0];
+            rs_avail_for_inst1 = (is_alu[0] && renamed_insts[0].is_valid && can_dispatch[0]) ? rs_rdys[0][1] : rs_rdys[0][0];
         end else if (is_ld[1]) begin
-            rs_avail_for_inst1 = (is_ld[0] && renamed_insts[0].is_valid && can_dispatch[0]) ? lsq_ld_rdy[1] : lsq_ld_rdy[0];
+            rs_avail_for_inst1 = (is_ld[0] && renamed_insts[0].is_valid && can_dispatch[0]) ? rs_rdys[1][1] : rs_rdys[1][0];
         end else if (is_st[1]) begin
-            rs_avail_for_inst1 = (is_st[0] && renamed_insts[0].is_valid && can_dispatch[0]) ? lsq_st_rdy[1] : lsq_st_rdy[0];
+            rs_avail_for_inst1 = (is_st[0] && renamed_insts[0].is_valid && can_dispatch[0]) ? rs_rdys[2][1] : rs_rdys[2][0];
         end else if (is_mdu[1]) begin
-            rs_avail_for_inst1 = (is_mdu[0] && renamed_insts[0].is_valid && can_dispatch[0]) ? mdu_rs_rdy[1] : mdu_rs_rdy[0];
+            rs_avail_for_inst1 = (is_mdu[0] && renamed_insts[0].is_valid && can_dispatch[0]) ? rs_rdys[3][1] : rs_rdys[3][0];
         end
     end
     assign can_dispatch[1] = !renamed_insts[1].is_valid || (rob_avail_for_inst1 && rs_avail_for_inst1);
@@ -95,24 +84,24 @@ module dispatch (
     // Ready to accept from rename if I can dispatch exactly both
     assign dispatch_rdy = can_dispatch[0] && can_dispatch[1];
 
-    assign alu_rs_we    = {dispatch_rdy && renamed_insts[1].is_valid && is_alu[1], dispatch_rdy && renamed_insts[0].is_valid && is_alu[0]};
-    assign lsq_ld_we    = {dispatch_rdy && renamed_insts[1].is_valid && is_ld[1], dispatch_rdy && renamed_insts[0].is_valid && is_ld[0]};
-    assign lsq_st_we    = {dispatch_rdy && renamed_insts[1].is_valid && is_st[1], dispatch_rdy && renamed_insts[0].is_valid && is_st[0]};
-    assign mdu_rs_we    = {dispatch_rdy && renamed_insts[1].is_valid && is_mdu[1], dispatch_rdy && renamed_insts[0].is_valid && is_mdu[0]};
+    assign rs_wes[0]    = {dispatch_rdy && renamed_insts[1].is_valid && is_alu[1], dispatch_rdy && renamed_insts[0].is_valid && is_alu[0]};
+    assign rs_wes[1]    = {dispatch_rdy && renamed_insts[1].is_valid && is_ld[1], dispatch_rdy && renamed_insts[0].is_valid && is_ld[0]};
+    assign rs_wes[2]    = {dispatch_rdy && renamed_insts[1].is_valid && is_st[1], dispatch_rdy && renamed_insts[0].is_valid && is_st[0]};
+    assign rs_wes[3]    = {dispatch_rdy && renamed_insts[1].is_valid && is_mdu[1], dispatch_rdy && renamed_insts[0].is_valid && is_mdu[0]};
     assign rob_we       = {dispatch_rdy && renamed_insts[1].is_valid, dispatch_rdy && renamed_insts[0].is_valid};
 
     // -- Step 5: Assign Data to Output Ports --
-    assign alu_rs_entries[0] = renamed_insts[0];
-    assign alu_rs_entries[1] = renamed_insts[1];
+    assign rs_issue_ports[0][0] = renamed_insts[0];
+    assign rs_issue_ports[0][1] = renamed_insts[1];
 
-    assign lsq_ld_entries[0] = renamed_insts[0];
-    assign lsq_ld_entries[1] = renamed_insts[1];
+    assign rs_issue_ports[1][0] = renamed_insts[0];
+    assign rs_issue_ports[1][1] = renamed_insts[1];
     
-    assign lsq_st_entries[0] = renamed_insts[0];
-    assign lsq_st_entries[1] = renamed_insts[1];
+    assign rs_issue_ports[2][0] = renamed_insts[0];
+    assign rs_issue_ports[2][1] = renamed_insts[1];
 
-    assign mdu_rs_entries[0] = renamed_insts[0];
-    assign mdu_rs_entries[1] = renamed_insts[1];
+    assign rs_issue_ports[3][0] = renamed_insts[0];
+    assign rs_issue_ports[3][1] = renamed_insts[1];
 
     // ROB Entry Generation Function
     function automatic rob_entry_t gen_rob_entry (input instruction_t r_inst);

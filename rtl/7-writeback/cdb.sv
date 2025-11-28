@@ -8,12 +8,10 @@
 import riscv_isa_pkg::*;
 import uarch_pkg::*;
 
-module cdb #(
-    parameter NUM_SOURCES = 4   // ALU, ALU, MDU, MEM
-)(
+module cdb (
     // Ports from Execute
-    input  writeback_packet_t   fu_results  [NUM_SOURCES-1:0],
-    output logic                fu_cdb_gnt  [NUM_SOURCES-1:0],
+    input  writeback_packet_t   fu_results  [NUM_FU-1:0],
+    output logic                fu_cdb_gnts  [NUM_FU-1:0],
 
     // Ports to ROB & Execute
     output writeback_packet_t   cdb_ports   [PIPE_WIDTH-1:0],
@@ -22,17 +20,17 @@ module cdb #(
     input  logic [TAG_WIDTH-1:0] rob_head
 );
     // Calculate age (distance from ROB head) for each source
-    logic [TAG_WIDTH-1:0] age [NUM_SOURCES];
+    logic [TAG_WIDTH-1:0] age [NUM_FU];
     
     always_comb begin
-        for (int i = 0; i < NUM_SOURCES; i++) age[i] = fu_results[i].dest_tag - rob_head;
+        for (int i = 0; i < NUM_FU; i++) age[i] = fu_results[i].dest_tag - rob_head;
     end
     
     //-------------------------------------------------------------
     // Select oldest valid source that hasn't been picked yet
     //-------------------------------------------------------------
     function automatic int find_oldest(
-        input logic [NUM_SOURCES-1:0] mask  // 1 = already selected, skip it
+        input logic [NUM_FU-1:0] mask  // 1 = already selected, skip it
     );
         int oldest_idx;
         logic [TAG_WIDTH-1:0] oldest_age;
@@ -42,7 +40,7 @@ module cdb #(
         oldest_age = '1;  // Start with max age
         found = 1'b0;
         
-        for (int i = 0; i < NUM_SOURCES; i++) begin
+        for (int i = 0; i < NUM_FU; i++) begin
             // Skip if already selected or invalid
             if (mask[i] || !fu_results[i].is_valid) 
                 continue;
@@ -62,7 +60,7 @@ module cdb #(
     // Iteratively select PIPE_WIDTH oldest sources
     //-------------------------------------------------------------
     int selected [PIPE_WIDTH];
-    logic [NUM_SOURCES-1:0] used_mask;
+    logic [NUM_FU-1:0] used_mask;
     
     always_comb begin
         used_mask = '0;
@@ -83,13 +81,13 @@ module cdb #(
     //-------------------------------------------------------------
     always_comb begin
         // Default: no grants
-        fu_cdb_gnt = '{default: 1'b0};
+        fu_cdb_gnts = '{default: 1'b0};
         
         // For each CDB port
         for (int port = 0; port < PIPE_WIDTH; port++) begin
             if (selected[port] >= 0) begin
                 // Valid selection - grant and broadcast
-                fu_cdb_gnt[selected[port]] = 1'b1;
+                fu_cdb_gnts[selected[port]] = 1'b1;
                 cdb_ports[port] = fu_results[selected[port]];
             end else begin
                 // No valid source for this port
