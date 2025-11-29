@@ -42,6 +42,7 @@ module issue (
         .clk(clk),
         .rst(rst),
         .flush(flush),
+        .cache_stall('0),   // ALU SHOULD NOT BE BACKPRESSURED FROM DCACHE
         // Ports from Dispatch
         .rs_rdy(rs_rdys[0]),
         .rs_we(rs_wes[0]),
@@ -68,7 +69,7 @@ module issue (
         .ld_lsq_entry(rs_issue_ports[1]),
         .st_lsq_entry(rs_issue_ports[2]),
         // Ports to Execute
-        .cache_stall(~fu_rdys[2]),
+        .cache_stall((~fu_rdys[2])),
         .execute_pkt(fu_packets[2]),
         .agu_rdy(fu_rdys[3]),
         .agu_execute_pkt(fu_packets[3]),

@@ -35,6 +35,9 @@ module core (
     logic [CPU_ADDR_BITS-1:0]   inst_pcs    [PIPE_WIDTH-1:0];
     logic [CPU_INST_BITS-1:0]   insts       [PIPE_WIDTH-1:0];
     logic                       fetch_val;
+    assign flush = '0;
+    assign pc_sel = {2'b0, flush};
+    assign rob_pc = '{default:'0};
     fetch fetch_stage (
         .clk(clk),
         .rst(rst),
@@ -55,7 +58,7 @@ module core (
         .insts(insts),
         .fetch_val(fetch_val)
     );
-
+    
     //-------------------------------------------------------------
     // 2-Decode
     //-------------------------------------------------------------
@@ -218,5 +221,5 @@ module core (
     );
 
     assign dmem_req_packet = fu_packets[2];
-
+    
 endmodule

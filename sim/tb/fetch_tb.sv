@@ -339,7 +339,7 @@ module fetch_tb;
         decode_rdy_i = 0;  // Stall decoder to fill buffer
         wait_for_fetch(3);
         
-        buffer_entries_before = INST_BUFFER_DEPTH - (dut.ib.write_ptr - dut.ib.read_ptr);
+        buffer_entries_before = INST_BUF_DEPTH - (dut.ib.write_ptr - dut.ib.read_ptr);
         $display("  Buffer has %0d entries before memory stall", buffer_entries_before);
         
         decode_rdy_i = 1;  // Resume decoder
@@ -348,7 +348,7 @@ module fetch_tb;
         cycles_with_valid_output = 0;
         
         // Buffer should continue providing valid output until empty
-        for (int i = 0; i < INST_BUFFER_DEPTH + 2; i++) begin
+        for (int i = 0; i < INST_BUF_DEPTH + 2; i++) begin
             @(posedge clk);
             
             if (fetch_val_o) begin
@@ -436,7 +436,7 @@ module fetch_tb;
         decode_rdy_i = 0;  // Stall decoder
         imem_req_rdy_i = 1; // Memory running
         
-        wait_for_fetch(INST_BUFFER_DEPTH + 2);
+        wait_for_fetch(INST_BUF_DEPTH + 2);
         
         check_assertion("Buffer fills when decoder stalled and memory running",
                        dut.ib.is_full == 1'b1,
@@ -451,7 +451,7 @@ module fetch_tb;
         imem_req_rdy_i = 0; // Stall memory
         
         drain_cycles = 0;
-        while (!dut.ib.is_empty && drain_cycles < INST_BUFFER_DEPTH + 5) begin
+        while (!dut.ib.is_empty && drain_cycles < INST_BUF_DEPTH + 5) begin
             @(posedge clk);
             drain_cycles++;
             if (fetch_val_o) begin

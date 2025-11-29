@@ -28,7 +28,7 @@ module mem_simple #(
     input  logic                        rst,
 
     // -- IMEM (read) --
-    input  logic                        imem_req_rdy,   // Made input for forced stimulus
+    output logic                        imem_req_rdy,
     input  logic                        imem_req_val,
     input  logic [CPU_ADDR_BITS-1:0]    imem_req_packet,
 
@@ -43,6 +43,8 @@ module mem_simple #(
     input  logic                        dmem_rec_rdy,
     output writeback_packet_t           dmem_rec_packet
 );
+    assign imem_req_rdy = 1;     // For simple memory, imem reads every cycle
+
     // ------------------------------
     // Local params & storage
     // ------------------------------
