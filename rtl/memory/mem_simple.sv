@@ -118,7 +118,7 @@ module mem_simple #(
         imem_rec_packet = '0;
         for (int w = 0; w < FETCH_WIDTH; w++) begin
             logic [CPU_ADDR_BITS-1:0] addr_w = imem_req_addr_d + (w*INST_BYTES);
-            imem_rec_packet[w*32 +: 32] = (rst)? 'x:word_at(addr_w);
+            imem_rec_packet[w*32 +: 32] = (rst)? '0:word_at(addr_w);
         end
     end
 

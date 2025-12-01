@@ -93,11 +93,14 @@ module execute (
         .agu_packet(fu_packets[3]),
         .agu_result(agu_result)
     );
+    assign fu_results[3] = '{default:'0}; // AGU doesnt write to CDB
     assign fu_rdys[3] = 1'b1; // AGU has no backpressure (always ready)
 
     //-------------------------------------------------------------
     // MDU                                                      (4)
     //-------------------------------------------------------------
     // TODO: Add MDU instantiation
+    assign fu_results[4] = '{default:'0};
+    assign fu_rdys[4] = 1'b0;
 
 endmodule

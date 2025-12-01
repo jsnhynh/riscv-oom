@@ -57,6 +57,8 @@ module issue (
     //-------------------------------------------------------------
     // LSQ                                                   (1, 2)
     //-------------------------------------------------------------
+    instruction_t mem_pkt;
+    assign fu_packets[2] = (mem_pkt.is_valid === 1)? mem_pkt : '{default:'0};
     lsq lsq_inst (
         .clk(clk),
         .rst(rst),
@@ -70,14 +72,14 @@ module issue (
         .st_lsq_entry(rs_issue_ports[2]),
         // Ports to Execute
         .cache_stall((~fu_rdys[2])),
-        .execute_pkt(fu_packets[2]),
+        .execute_pkt(mem_pkt),
         .agu_rdy(fu_rdys[3]),
         .agu_execute_pkt(fu_packets[3]),
 
         .agu_result(agu_result),
 
         .alu_rdy('0),     // ?
-        .forward_pkt(), 
+        .forward_pkt(forward_pkt), 
         .forward_rdy(),
         .forward_re('0),
         
@@ -88,5 +90,7 @@ module issue (
     //-------------------------------------------------------------
     // MDU RS                                                   (3)
     //-------------------------------------------------------------
+    assign fu_packets[4]    = '{default:'0};
+    assign fu_rdys[4]       = '0;
 
 endmodule

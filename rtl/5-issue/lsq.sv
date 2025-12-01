@@ -299,7 +299,7 @@ always_comb begin
     endcase
     if(st_alu_rdy) execute_pkt = st_execute_pkt;
     else if (ld_alu_rdy) execute_pkt = ld_execute_pkt;
-    else execute_pkt = '0;
+    else execute_pkt = '{default:'0};
   end
 end
 

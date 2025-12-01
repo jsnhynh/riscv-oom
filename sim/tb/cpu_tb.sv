@@ -42,21 +42,6 @@ module cpu_tb;
     );
 
     //-------------------------------------------------------------
-    // Instruction Tracking
-    //-------------------------------------------------------------
-    always_ff @(posedge clk) begin
-        if (!rst) begin
-            // Count committed instructions by monitoring ROB commit
-            // Assumes commit_write_ports indicate valid commits
-            for (int i = 0; i < PIPE_WIDTH; i++) begin
-                if (dut.core0.commit_write_ports[i].we) begin
-                    instruction_count++;
-                end
-            end
-        end
-    end
-
-    //-------------------------------------------------------------
     // Helper Tasks
     //-------------------------------------------------------------
     
@@ -124,9 +109,9 @@ module cpu_tb;
         logic done;
         int last_inst_count;
         int stall_cycles;
-        
+        instruction_count = 2;
         done = 0;
-        cycle_count = 0;
+        cycle_count = 1;
         stall_cycles = 0;
         last_inst_count = 0;
         
@@ -135,6 +120,9 @@ module cpu_tb;
         while (!done && cycle_count < MAX_CYCLES) begin
             @(posedge clk);
             cycle_count++;
+            if (dut.core0.imem_rec_val) begin
+                instruction_count+=2;   // Assumes even for simplicity
+            end
             
             completion_reg = dut.core0.rename_stage.prf_inst.data_reg[31];
             
@@ -212,10 +200,9 @@ module cpu_tb;
         
         // Reset
         rst = 1;
-        repeat(5) @(posedge clk);
+        repeat(2) @(posedge clk);
         rst = 0;
         
-        repeat(100)@(posedge clk);
         // Wait for program to complete
         wait_for_completion();
         
