@@ -123,12 +123,12 @@ always_comb begin
             else begin
                 rs_read_rdy = 1'b1;
                 if(alu_re) begin
-                    rs_write_rdy = 1'b1;
-                    if(rs_we) next_state = WAIT_REG;
-                    else begin
-                        man_flush = 1'b1;
+                    //rs_write_rdy = 1'b1;
+                    //if(rs_we) next_state = WAIT_REG;
+                    //else begin
+                        //man_flush = 1'b1;
                         next_state = IDLE;
-                    end
+                    
                 end
                 else next_state = VALID_ENTRY;
             end
@@ -136,8 +136,9 @@ always_comb begin
         FWD_ENTRY : begin
             forward_rdy = 1'b1;
             if(forward_re) begin
-                if(rs_we) next_state = WAIT_REG;
-                else next_state = IDLE;
+                //if(rs_we) next_state = WAIT_REG;
+                //else
+                next_state = IDLE;
             end
         end
     endcase

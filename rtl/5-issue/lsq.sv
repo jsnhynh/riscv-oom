@@ -36,9 +36,15 @@ function int oh_2_i (logic [PIPE_WIDTH-1:0] v);
         o = 0;
         for (int i = 0; i < PIPE_WIDTH; i++) if (v[i]) o = i;
         return o;
-    endfunction
+  endfunction
 
-//LD SHIT
+
+
+
+
+
+
+//LD 
 logic [RS_SIZE - 1 : 0] ld_we_arr;
 logic [RS_SIZE - 1 : 0] ld_write_rdy_arr ;
 logic [RS_SIZE - 1 : 0] [PIPE_WIDTH - 1 : 0]  ld_sel_arr;
@@ -48,16 +54,21 @@ logic [RS_SIZE - 1 : 0] ld_re_arr ;
 //store
 instruction_t store_q [STQ_DEPTH];
 
-
 instruction_t ld_execute_pkt_arr [RS_SIZE - 1 : 0];
 instruction_t mux_ld_entry_arr [RS_SIZE - 1 : 0];
-//AGU SHETT
+
+
+//AGU 
 instruction_t agu_execute_pkt_arr [RS_SIZE + STQ_DEPTH - 1 : 0];
 logic agu_read_rdy_arr [RS_SIZE + STQ_DEPTH - 1 : 0];
+
+
 //FORWARDING
 logic [RS_SIZE - 1: 0] ld_forward_rdy_arr;
 logic [RS_SIZE - 1: 0] ld_forward_re_arr;
 instruction_t ld_forward_pkt_arr [RS_SIZE - 1 : 0];
+
+
 
 genvar i;
 generate
@@ -95,6 +106,8 @@ endgenerate
 
 logic [$clog2(PIPE_WIDTH) + 1 : 0] s;
 logic [$clog2(RS_SIZE) + 1 : 0] ld_total_open_entries, ld_total_ready_entries;
+
+
 function int ret_exe_candidate(int best_no);
     instruction_t candidate [RS_SIZE];
     int o [RS_SIZE];
@@ -124,16 +137,19 @@ function int ret_exe_candidate(int best_no);
 endfunction
 
 
-int c1, c2;
+
+
+int c1;
 logic ld_alu_rdy, st_alu_rdy;
 instruction_t ld_execute_pkt, st_execute_pkt;
 always_comb begin
+    //initialization / default values
     s = 0;
-    foreach (ld_re_arr[i]) ld_re_arr[i] = 1'b0;
-    foreach (ld_we_arr[i]) ld_we_arr[i] = 1'b0;
-    foreach (ld_sel_arr[i]) ld_sel_arr[i] = 1'b0;
-    ld_total_open_entries = '0;
-    ld_total_ready_entries = '0;
+    //foreach (ld_re_arr[i]) ld_re_arr[i] = 1'b0;
+    //foreach (ld_we_arr[i]) ld_we_arr[i] = 1'b0;
+    //foreach (ld_sel_arr[i]) ld_sel_arr[i] = 2'b0;
+
+    //loop to choose which ld_res station to write to (we write to lowest arr available one, can either write to one or 2 at a time)
     for(int i = 0; i < RS_SIZE; i++) begin
         //this if condition is hella sus if it works thank god but idk
         if(ld_write_rdy_arr[i] == 1'b1 && ld_lsq_we[s] == 1'b1 && s < PIPE_WIDTH) begin
@@ -141,19 +157,26 @@ always_comb begin
              ld_we_arr[i] = 1'b1;
              s = s + 1'b1;
         end
-        ld_total_open_entries += ld_write_rdy_arr[i];
-        ld_total_ready_entries += ld_read_rdy_arr[i];
-        mux_ld_entry_arr[i] = ld_lsq_entry[oh_2_i(ld_sel_arr[i])];
+        else begin 
+          ld_sel_arr[i] = 2'd0;
+          ld_we_arr[i] = 1'd0;
+        end
+        //total open and ready entries
+        if(|ld_write_rdy_arr) ld_total_open_entries += ld_write_rdy_arr[i];
+        else ld_total_open_entries = '0;
+        if(|ld_read_rdy_arr) ld_total_ready_entries += ld_read_rdy_arr[i];
+        else ld_total_ready_entries = '0;
+        //muxing either the 0th or 1st entry inputs, based on sel_arr which one hot encoded
+        if(ld_sel_arr[i] == 2'd0 ||ld_sel_arr[i] == 2'b11 ) mux_ld_entry_arr[i] = '0;
+        else if (ld_sel_arr[i] == 2'b01) mux_ld_entry_arr[i] = ld_lsq_entry[0];
+        else if (ld_sel_arr[i] == 2'b10) mux_ld_entry_arr[i] = ld_lsq_entry[1];
     end
+
     for(int i = 0; i < PIPE_WIDTH; i++) ld_lsq_rdy[i] = (ld_total_open_entries > i + 1) ? 1 : 0;
 
     //outputs
-     c1 = ret_exe_candidate(1);
-     ld_execute_pkt = ld_execute_pkt_arr[c1];
-    if(ld_alu_rdy == 1'b1) begin
-        ld_re_arr[c1] = 1'b1;
-        
-    end
+    
+    
 end
 
 //logic to select open reservation stations and write to them
@@ -285,6 +308,8 @@ function int rb_agu_c();
   end
   return o;
 endfunction
+
+
 always_comb begin
   st_alu_rdy = 1'b0;
   ld_alu_rdy = 1'b0;
@@ -296,11 +321,29 @@ always_comb begin
         if(st_execute_pkt.pc > ld_execute_pkt.pc ) st_alu_rdy = 1'b1;
         else ld_alu_rdy = 1'b1;
       end
+      default : begin
+        ld_alu_rdy = 1'b1;
+        st_alu_rdy = 1'b1;
+      end
     endcase
     if(st_alu_rdy) execute_pkt = st_execute_pkt;
     else if (ld_alu_rdy) execute_pkt = ld_execute_pkt;
     else execute_pkt = '{default:'0};
   end
+  else begin
+      execute_pkt = '0;
+      st_alu_rdy = 1'b0;
+      ld_alu_rdy = 1'b0;
+  end
+  if(ld_alu_rdy == 1'b1) begin
+      c1 = ret_exe_candidate(1);
+      ld_execute_pkt = ld_execute_pkt_arr[c1];
+      foreach(ld_re_arr[i]) begin
+        if(i == c1) ld_re_arr[i] = 1'b1;
+        else ld_re_arr[i] = 1'b0;
+      end
+    end
+    else foreach(ld_re_arr[i]) ld_re_arr[i] = 1'b0;
 end
 
 //agu logic

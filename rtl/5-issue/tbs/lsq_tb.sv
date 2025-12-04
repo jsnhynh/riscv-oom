@@ -178,22 +178,30 @@ instruction_t temp;
     end
     else if (load == 1 && |ld_lsq_rdy == 1) begin
         ld_lsq_entry[0] <= gen_random_instr_pkt(32'h000_000f, 32'h000_0000, 5'd8, 5'd8, 0, 20);
-        ld_lsq_we[0] <= 1'b0;
+        ld_lsq_we[0] <= 1'b1;
     end
+        $display("LINE 183");
         @(posedge clk);
         st_lsq_we <= 1'b0;
         ld_lsq_we <= 1'b0;
         agu_rdy <= 1'b1;
         @(posedge clk);
+        $display("LINE 189");
         wait(agu_execute_pkt.is_valid);
+        $display("line 191");
         @(posedge clk);
         agu_result <= gen_agu(agu_execute_pkt);
         agu_rdy <= 1'b1;
         @(posedge clk);
-        agu_rdy <= 1'b0;
+        $display("line 196");
+        agu_rdy <= 1'b1;
+        @(posedge clk);
         alu_rdy <= 1'b1;
+        $display("line 199");
         @(posedge clk);
+        $display("line 201");
         @(posedge clk);
+        $display("line 203");
         @(posedge clk);
         $finish;
     
@@ -215,7 +223,7 @@ endtask
 initial begin
     toggle_rst();
     //rndm_tst();
-    single_trasaction(0);
+    single_trasaction(1);
     //cdb_forward();
 end
 
