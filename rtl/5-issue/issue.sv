@@ -38,7 +38,7 @@ module issue (
     //-------------------------------------------------------------
     // ALU RS                                                   (0)
     //-------------------------------------------------------------
-    alu_rs alu_rs_inst (
+    /* alu_rs alu_rs_inst (
         .clk(clk),
         .rst(rst),
         .flush(flush),
@@ -52,6 +52,22 @@ module issue (
         .execute_pkt(fu_packets[1:0]),
         // CDB
         .cdb_ports(cdb_ports)
+    ); */
+    reservation_station #(.NUM_ENTRIES(ALU_RS_ENTRIES), .ISSUE_WIDTH(2)) alu_rs_isnt (
+        .clk(clk),
+        .rst(rst),
+        .flush(flush),
+        // Dispatch Interface
+        .rs_rdy(rs_rdys[0]),
+        .rs_we(rs_wes[0]),
+        .rs_entries_in(rs_issue_ports[0]),
+        // Issue Interface
+        .fu_rdy(fu_rdys[1:0]),
+        .fu_packets(fu_packets[1:0]),
+        // Wakeup Interface
+        .cdb_ports(cdb_ports),
+        // Age Tracking
+        .rob_head(rob_head)
     );
 
     //-------------------------------------------------------------

@@ -69,6 +69,7 @@ module prf (
                 data_reg[commit_write_ports[0].addr] <= commit_write_ports[0].data;
                 if (renamed_reg[commit_write_ports[0].addr] && (tag_reg[commit_write_ports[0].addr] == commit_write_ports[0].tag)) begin
                     renamed_reg[commit_write_ports[0].addr] <= 1'b0;
+                    tag_reg[commit_write_ports[0].addr]     <= 1'b0;
                 end
             end
             
@@ -76,6 +77,7 @@ module prf (
                 data_reg[commit_write_ports[1].addr] <= commit_write_ports[1].data;
                 if (renamed_reg[commit_write_ports[1].addr] && (tag_reg[commit_write_ports[1].addr] == commit_write_ports[1].tag)) begin
                     renamed_reg[commit_write_ports[1].addr] <= 1'b0;
+                    tag_reg[commit_write_ports[1].addr]     <= 1'b0;  // FIXED: was [0], now [1]
                 end
             end
 
@@ -93,4 +95,3 @@ module prf (
     end
 
 endmodule
-
