@@ -62,7 +62,6 @@ module decode (
         d_inst.src_1_b.tag  = rs2;
 
         d_inst.opcode   = inst[6:0];
-        d_inst.funct7   = inst[31:25];
 
         casez (d_inst.opcode)  // Instructions are valid if sent from buffer and compliant opcode
             OPC_LUI, OPC_AUIPC, OPC_JAL, OPC_JALR, OPC_BRANCH, OPC_LOAD, OPC_STORE, OPC_ARI_ITYPE, OPC_ARI_RTYPE, OPC_CSR:
@@ -104,6 +103,12 @@ module decode (
         casez (d_inst.opcode)
             OPC_BRANCH: d_inst.uop_1 = funct3;
             default:    d_inst.uop_1 = '0;
+        endcase
+
+        casez (d_inst.opcode)
+            OPC_ARI_RTYPE:                              d_inst.funct7   = inst[31:25];
+            OPC_ARI_ITYPE:  if (funct3 == FNC_SRL_SRA)  d_inst.funct7   = inst[31:25];
+            default:                                    d_inst.funct7   = '0;
         endcase
         
         return d_inst;
