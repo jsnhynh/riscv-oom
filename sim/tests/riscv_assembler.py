@@ -10,7 +10,7 @@
 # - You must manually load the starting location of your stack pointer in the asm program
 # using the li instruction
 #---------------------------------------------------------------------
-file = open("../rv32im_test.s", "r")
+file = open("rv32im_test_script_mod.s", "r")
 mem_file = open("mem.txt", "w") 
 lines = file.readlines()
 
