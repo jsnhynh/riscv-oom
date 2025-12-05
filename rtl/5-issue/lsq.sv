@@ -28,7 +28,9 @@ import uarch_pkg::*;
     //FORWARD 
     output writeback_packet_t forward_pkt,
     output logic forward_rdy,
-    input logic forward_re
+    input logic forward_re,
+    //ROB
+    input  logic [TAG_WIDTH-1:0]    rob_head 
 );
 //how many alu we have
 function int oh_2_i (logic [PIPE_WIDTH-1:0] v);
@@ -98,7 +100,8 @@ generate
         .store_q(store_q),
         .forward_re(ld_forward_re_arr[i]),
         .forward_pkt(ld_forward_pkt_arr[i]),
-        .forward_rdy(ld_forward_rdy_arr[i])
+        .forward_rdy(ld_forward_rdy_arr[i]),
+        .rob_head(rob_head)
         );
     end
 
@@ -112,7 +115,6 @@ function int ret_exe_candidate(int best_no);
     instruction_t candidate [RS_SIZE];
     int o [RS_SIZE];
     foreach(candidate[i]) candidate[i] = '0;
-
     for(int i = 0; i < best_no; i++) begin
         foreach(ld_execute_pkt_arr[j]) begin
             if(ld_read_rdy_arr[j]) begin
@@ -120,7 +122,7 @@ function int ret_exe_candidate(int best_no);
                      candidate[i] = ld_execute_pkt_arr[j];
                      o[i] = j;
                 end
-                else if (ld_execute_pkt_arr[j].pc < candidate[i].pc)begin
+                else if (ld_execute_pkt_arr[j].dest_tag - rob_head < candidate[i].dest_tag - rob_head)begin
                     if(i == 0) begin
                         candidate[i] = ld_execute_pkt_arr[j];
                         o[i] = j;
@@ -303,7 +305,7 @@ function int rb_agu_c();
          o = i;
          flag = 1;
       end
-      else if (agu_execute_pkt_arr[i].pc < agu_execute_pkt_arr[o].pc) o = i;
+      else if (agu_execute_pkt_arr[i].dest_tag - rob_head < agu_execute_pkt_arr[o].dest_tag - rob_head) o = i;
     end
   end
   return o;
@@ -318,7 +320,7 @@ always_comb begin
       2'b01 : ld_alu_rdy = 1'b1;
       2'b10 : st_alu_rdy = 1'b1;
       2'b11 : begin
-        if(st_execute_pkt.pc > ld_execute_pkt.pc ) st_alu_rdy = 1'b1;
+        if(st_execute_pkt.dest_tag - rob_head > ld_execute_pkt.dest_tag - rob_head ) st_alu_rdy = 1'b1;
         else ld_alu_rdy = 1'b1;
       end
       default : begin
@@ -364,7 +366,7 @@ function int rb_fwd_c();
         flag = 1;
         o = i;
       end
-      else if(ld_forward_pkt_arr[i].pc < ld_forward_pkt_arr[o].pc) o = i;
+      else if(ld_forward_pkt_arr[i].dest_tag - rob_head < ld_forward_pkt_arr[o].dest_tag - rob_head) o = i;
     end
   end
 endfunction

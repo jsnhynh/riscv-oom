@@ -18,6 +18,9 @@ module issue (
     // Ports to Execute
     input  logic [NUM_FU-1:0]       fu_rdys,
     output instruction_t            fu_packets      [NUM_FU-1:0],
+    
+    input  logic                    dmem_rec_rdy,       // Backpressure to memory
+    output writeback_packet_t       dmem_rec_packet,    // From DMEM
 
     // Ports from ROB
     input  logic [TAG_WIDTH-1:0]    commit_store_ids    [PIPE_WIDTH-1:0],
@@ -94,13 +97,15 @@ module issue (
 
         .agu_result(agu_result),
 
-        .alu_rdy('0),     // ?
+        .alu_rdy(dmem_rec_rdy),     // ?
+        .execute_pkt(dmem_rec_packet),
         .forward_pkt(forward_pkt), 
         .forward_rdy(),
         .forward_re('0),
         
         // CDB
-        .cdb_ports(cdb_ports)
+        .cdb_ports(cdb_ports),
+        .rob_head(rob_head)
     );
 
     //-------------------------------------------------------------
