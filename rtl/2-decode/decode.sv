@@ -85,6 +85,7 @@ module decode (
         casez (d_inst.opcode)
             OPC_AUIPC, OPC_JAL, OPC_BRANCH: 
                         d_inst.src_0_a.data = pc;   // Use PC as first operand
+            OPC_LUI:    d_inst.src_0_a.data = '0;
             default:    d_inst.src_0_a.tag  = rs1;  // Use rs1
         endcase
 

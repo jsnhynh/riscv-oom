@@ -119,7 +119,7 @@ module rename (
         r_inst.dest_tag     = new_tag;
 
         // Use sources from PRF read (bypass will be applied later)
-        if (d_inst.src_0_a.tag == d_inst.src_1_a.tag) begin
+        if ((d_inst.src_0_a.tag == d_inst.src_1_a.tag) && ~(d_inst.opcode == OPC_LUI)) begin
             r_inst.src_0_a.data         = rs1_port.data;
             r_inst.src_0_a.tag          = rs1_port.tag;
             r_inst.src_0_a.is_renamed   = rs1_port.is_renamed;

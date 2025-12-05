@@ -197,16 +197,19 @@ module reservation_station_tb;
         
         @(posedge clk);
         rs_we = 2'b00;
+        rs_entries_in[0] = '{default:'0};
+        rs_entries_in[1] = '{default:'0};
         
         @(negedge clk);
         
         check_assertion("Both instructions stored",
                        dut.entries[0].is_valid && dut.entries[1].is_valid,
-                       "Instructions not stored in RS");
+                       "Instructions stored in RS");
         
-        check_assertion("Both instructions ready to issue",
-                       dut.entry_ready == 8'b0000_0011,
+        check_assertion("Both instructions issued",
+                       dut.issue_grants == 8'b0000_0011,
                        $sformatf("Expected ready=0x03, got 0x%02h", dut.entry_ready));
+
         
         $display("");
 
@@ -282,32 +285,12 @@ module reservation_station_tb;
         @(posedge clk);
         cdb_ports[0] = make_cdb_packet(5'h0A, 32'hDEAD_BEEF);
         
-        // Check on negedge - NOT ready yet (Option 2: needs next cycle)
-        @(negedge clk);
-        
-        check_assertion("Instruction NOT ready same cycle",
-                       dut.entry_ready[0] == 1'b0,
-                       "Instruction should not be ready in same cycle as CDB");
-        
-        check_assertion("Data captured from CDB (in entries_next)",
-                       dut.entries_next[0].src_0_a.data == 32'hDEAD_BEEF,
-                       $sformatf("Expected data=0xDEADBEEF in entries_next, got 0x%08h", 
-                                dut.entries_next[0].src_0_a.data));
-        
-        @(posedge clk);
-        cdb_ports[0] = '{default: '0};
-        
-        // Check next cycle - NOW ready and can issue
+        // Check on negedge - RS SHOULD ISSUE SAME CYCLE
         @(negedge clk);
         
         check_assertion("Instruction woke up (next cycle)",
                        dut.entry_ready[0] == 1'b1,
                        "Instruction should be ready next cycle after CDB");
-        
-        check_assertion("Data in entries (stable)",
-                       dut.entries[0].src_0_a.data == 32'hDEAD_BEEF,
-                       $sformatf("Expected data=0xDEADBEEF in entries, got 0x%08h", 
-                                dut.entries[0].src_0_a.data));
         
         check_assertion("Instruction issued with correct data",
                        fu_packets[0].dest_tag == 5'h05 && 
@@ -373,34 +356,42 @@ module reservation_station_tb;
         rs_entries_in[0] = make_test_inst(5'h06, 5'h05, 1'b0, 5'h00, 1'b1);  // Waits for 0x05
 
         @(negedge clk);
-        check_assertion("Producer ready, consumer waiting",
+        check_assertion("Inst 0 ready, consumer waiting",
                        dut.entry_ready == 8'b0000_0001,
                        $sformatf("Expected ready=0x01, got 0x%02h", dut.entry_ready));
 
-        check_assertion("Producer issued",
+        check_assertion("Inst 0 issued",
                        fu_packets[0].dest_tag == 5'h05,
                        $sformatf("Expected tag=0x05, got 0x%02h", fu_packets[0].dest_tag));
         
         @(posedge clk);
-        rs_we = 2'b00;
+        rs_we = 2'b11;
+        rs_entries_in[0] = make_test_inst(5'h07, 5'h06, 1'b0, 5'h00, 1'b1);  // Waits for 0x06
+        rs_entries_in[1] = make_test_inst(5'h08, 5'h08, 1'b1, 5'h08, 1'b1);
         cdb_ports[0] = make_cdb_packet(5'h05, 32'h1234_5678);
-                        
-        @(posedge clk);
-        cdb_ports[0] = '{default: '0};
-        @(negedge clk);
         
-        check_assertion("Consumer woke up",
+        @(negedge clk);
+        check_assertion("Inst 1 woke up",
                        dut.entry_ready[0] == 1'b1,
                        "Consumer should wake up after producer broadcasts");
         
-        check_assertion("Consumer captured data",
-                       dut.entries[0].src_0_a.data == 32'h1234_5678,
+        check_assertion("Inst 1 issued",
+                       fu_packets[0].src_0_a.data == 32'h1234_5678,
                        $sformatf("Expected data=0x12345678, got 0x%08h",
-                                dut.entries[0].src_0_a.data));
+                                fu_packets[0].src_0_a.data));
 
-        check_assertion("Consumer issued",
-                       fu_packets[0].dest_tag == 5'h06,
-                       $sformatf("Expected tag=0x06, got 0x%02h", fu_packets[0].dest_tag));
+        @(posedge clk);
+        rs_we = 2'b00;
+        rs_entries_in = '{default:'0};
+
+        @(negedge clk);
+        check_assertion("Inst 3 & 4 stored",
+                       dut.entries[0].is_valid && dut.entries[1].is_valid ,
+                       "Both Instructions stored in RS");
+
+        check_assertion("Inst 4 issued",
+                       fu_packets[0].dest_tag == 5'h08,
+                       $sformatf("Expected tag=0x08, got 0x%02h", fu_packets[0].dest_tag));
         
         $display("");
 
