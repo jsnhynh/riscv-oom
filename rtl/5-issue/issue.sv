@@ -76,8 +76,8 @@ module issue (
     //-------------------------------------------------------------
     // LSQ                                                   (1, 2)
     //-------------------------------------------------------------
-    instruction_t mem_pkt;
-    assign fu_packets[2] = (mem_pkt.is_valid === 1)? mem_pkt : '{default:'0};
+   // instruction_t mem_pkt;
+   // assign fu_packets[2] = (mem_pkt.is_valid === 1)? mem_pkt : '{default:'0};
     lsq lsq_inst (
         .clk(clk),
         .rst(rst),
@@ -91,7 +91,7 @@ module issue (
         .st_lsq_entry(rs_issue_ports[2]),
         // Ports to Execute
         .cache_stall((~fu_rdys[2])),
-        .execute_pkt(mem_pkt),
+       // .execute_pkt(mem_pkt),
         .agu_rdy(fu_rdys[3]),
         .agu_execute_pkt(fu_packets[3]),
 
