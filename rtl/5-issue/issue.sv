@@ -18,6 +18,9 @@ module issue (
     // Ports to Execute
     input  logic [NUM_FU-1:0]       fu_rdys,
     output instruction_t            fu_packets      [NUM_FU-1:0],
+    
+    input  logic                    dmem_req_rdy,       // Backpressure to memory
+   // output writeback_packet_t       dmem_req_packet,    // From DMEM
 
     // Ports from ROB
     input  logic [TAG_WIDTH-1:0]    commit_store_ids    [PIPE_WIDTH-1:0],
@@ -73,8 +76,8 @@ module issue (
     //-------------------------------------------------------------
     // LSQ                                                   (1, 2)
     //-------------------------------------------------------------
-    instruction_t mem_pkt;
-    assign fu_packets[2] = (mem_pkt.is_valid === 1)? mem_pkt : '{default:'0};
+   // instruction_t mem_pkt;
+   // assign fu_packets[2] = (mem_pkt.is_valid === 1)? mem_pkt : '{default:'0};
     lsq lsq_inst (
         .clk(clk),
         .rst(rst),
@@ -88,19 +91,21 @@ module issue (
         .st_lsq_entry(rs_issue_ports[2]),
         // Ports to Execute
         .cache_stall((~fu_rdys[2])),
-        .execute_pkt(mem_pkt),
+       // .execute_pkt(mem_pkt),
         .agu_rdy(fu_rdys[3]),
         .agu_execute_pkt(fu_packets[3]),
 
         .agu_result(agu_result),
 
-        .alu_rdy('0),     // ?
+        .alu_rdy(dmem_req_rdy),     // ?
+        .execute_pkt(fu_packets[2]),
         .forward_pkt(forward_pkt), 
         .forward_rdy(),
         .forward_re('0),
         
         // CDB
-        .cdb_ports(cdb_ports)
+        .cdb_ports(cdb_ports),
+        .rob_head(rob_head)
     );
 
     //-------------------------------------------------------------

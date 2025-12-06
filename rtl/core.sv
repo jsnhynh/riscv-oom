@@ -147,6 +147,8 @@ module core (
         // Ports to Execute
         .fu_rdys(fu_rdys),
         .fu_packets(fu_packets),
+        .dmem_req_rdy(dmem_req_rdy),
+        //.dmem_req_packet(fu_packets[2]),
         // Ports from ROB
         .commit_store_ids(commit_store_ids),
         .commit_store_vals(commit_store_vals),

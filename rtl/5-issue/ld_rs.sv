@@ -32,8 +32,9 @@ import uarch_pkg::*;
     input instruction_t store_q [STQ_DEPTH],
     input logic forward_re,
     output writeback_packet_t forward_pkt,
-    output logic forward_rdy
-    
+    output logic forward_rdy,
+    //rob_head
+    input  logic [TAG_WIDTH-1:0]    rob_head
 );
 instruction_t fwd_entry;
 logic forward_match;
@@ -61,19 +62,26 @@ rs rs (
     //CDB PORT 
     .cdb_ports(cdb_ports)
 );
-always_comb begin
-    agu_we = agu_port.is_valid && agu_port.dest_tag == execute_pkt.dest_tag;
-    case ({rs_we, agu_we, fwd_we})
-        3'b100: muxed_rs_entry = rs_entry;
-        3'b010: muxed_rs_entry = agu_rs_entry;
-        3'b001: muxed_rs_entry = fwd_entry; 
-        default: muxed_rs_entry = rs_entry;
-    endcase
-    agu_execute_pkt = execute_pkt;
-    agu_rs_entry = execute_pkt;
-    agu_rs_entry.src_0_a.data = agu_port.result;
-    agu_rs_entry.agu_comp = 1'b1;
-end
+    assign agu_we = agu_port.is_valid && agu_port.dest_tag == execute_pkt.dest_tag;
+    //muxed_rs_entry = '0;
+    // case ({rs_we, agu_we, fwd_we})
+    //     3'b100: muxed_rs_entry = rs_entry;
+    //     3'b010: muxed_rs_entry = agu_rs_entry;
+    //     3'b001: muxed_rs_entry = fwd_entry; 
+    //     default: muxed_rs_entry = rs_entry;
+    // endcase
+    always_comb begin
+        if(rs_we) muxed_rs_entry = rs_entry;
+        else if (agu_we) muxed_rs_entry = agu_rs_entry;
+        else if (fwd_we) muxed_rs_entry = fwd_entry;
+        else muxed_rs_entry = '0;
+    end
+    assign agu_execute_pkt = execute_pkt;
+    always_comb begin  
+        agu_rs_entry = execute_pkt;
+        agu_rs_entry.src_0_a.data = agu_port.result;
+        agu_rs_entry.agu_comp = 1'b1;
+    end
 typedef enum logic [2:0] {
     IDLE,
     WAIT_REG,
@@ -123,12 +131,12 @@ always_comb begin
             else begin
                 rs_read_rdy = 1'b1;
                 if(alu_re) begin
-                    //rs_write_rdy = 1'b1;
-                    //if(rs_we) next_state = WAIT_REG;
-                    //else begin
-                        //man_flush = 1'b1;
+                    rs_write_rdy = 1'b1;
+                    if(rs_we) next_state = WAIT_REG;
+                    else begin
+                        man_flush = 1'b1;
                         next_state = IDLE;
-                    
+                    end
                 end
                 else next_state = VALID_ENTRY;
             end
@@ -136,31 +144,36 @@ always_comb begin
         FWD_ENTRY : begin
             forward_rdy = 1'b1;
             if(forward_re) begin
-                //if(rs_we) next_state = WAIT_REG;
-                //else
+                if(rs_we) next_state = WAIT_REG;
+                else
                 next_state = IDLE;
             end
         end
     endcase
 end
 
-logic [$clog2(STQ_DEPTH) : 0] forward_match_index;
 //something aint right here
-always_comb begin 
+function instruction_t find_fwd();
+    instruction_t out;
+    out = '0;
     foreach(store_q[i]) begin
-        if(store_q[i].agu_comp && (store_q[i].src_0_a.data == execute_pkt.src_0_a.data) && store_q[i].pc < execute_pkt.pc)begin
-             forward_match_index = i;
-             forward_match = 1'b1;
-             break;
-        end
-        else begin
-            forward_match = 1'b0;
-            forward_match_index = 1'b0;
+        if(store_q[i].dest_tag - rob_head < execute_pkt - rob_head) begin
+            if(store_q[i].src_0_a.data == execute_pkt.src_0_a.data) out = store_q[i];
         end
     end
+    return out;
+endfunction
+
+instruction_t ff;
+always_comb begin 
     fwd_entry = execute_pkt;
-    fwd_entry.src_0_a = store_q[forward_match_index].src_1_b;
-    
+    ff = find_fwd();
+    if(ff != 0) begin
+        forward_match = 1'b1;
+        fwd_entry.src_0_a = ff.src_1_b;
+    end
+    else forward_match = 1'b0;
+
     forward_pkt.dest_tag = execute_pkt.dest_tag;
     forward_pkt.exception = 1'b0;
     forward_pkt.is_valid = forward_rdy;

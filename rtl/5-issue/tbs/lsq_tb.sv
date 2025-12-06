@@ -56,7 +56,8 @@ instruction_t store_q [STQ_DEPTH];
     //FORWARD 
     .forward_pkt(forward_pkt),
     .forward_rdy(forward_rdy),
-    .forward_re(forward_re)
+    .forward_re(forward_re),
+    .rob_head(0)
 
 );
 
