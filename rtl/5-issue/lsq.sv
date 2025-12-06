@@ -236,7 +236,7 @@ logic [$clog2(STQ_DEPTH) : 0] count, wr_ptr, wr_ptr_nxt, rd_ptr;
       wr_ptr <= '0;
       wr_ptr_nxt <= 'b1;
     end 
-    else if (push_mem[0]) begin
+    else if (push_mem[0] & !push_mem[1]) begin
       wr_ptr <= (wr_ptr == STQ_DEPTH-1) ? '0 : (wr_ptr + 1'b1);
       wr_ptr_nxt <= (wr_ptr_nxt == STQ_DEPTH-1) ? '0 : (wr_ptr_nxt + 1'b1);
     end
@@ -273,17 +273,24 @@ always_comb begin
     pop_rdy = st_read_rdy[rd_ptr] & !empty;
     pop_mem  = st_alu_rdy & ~empty & pop_rdy;   
     empty = (count == 0);
-    foreach (mux_st_entry_arr[i]) mux_st_entry_arr[i] = st_lsq_entry[oh_2_i(st_sel_arr[i])];
+    foreach (mux_st_entry_arr[i]) begin
+       if(st_sel_arr[i] == 2'b01) mux_st_entry_arr[i] = st_lsq_entry[0];
+       else if (st_sel_arr[i] == 2'b10) mux_st_entry_arr[i] = st_lsq_entry[1];
+       else mux_st_entry_arr[i] = '0;
+    end
     
     foreach(st_we_arr[i]) begin
-      if(push_mem[0] && i == wr_ptr) st_we_arr[i] = 1'b1;
+      if(push_mem[0] && i == wr_ptr)begin
+         st_we_arr[i] = 1'b1;
+         st_sel_arr[i] = 2'b01;
+      end
       else if  (push_mem[1] && i == wr_ptr_nxt) begin
         st_we_arr[i] = 1'b1;
-        st_sel_arr[i] = 1'b1;
+        st_sel_arr[i] = 2'b10;
       end
       else begin
         st_we_arr[i] = 1'b0;
-        st_sel_arr[i] = 1'b0;
+        st_sel_arr[i] = 2'b00;
       end
       if(pop_mem && i == rd_ptr) st_re_arr[i] = 1'b1;
       else st_re_arr[i] = 1'b0;
@@ -324,8 +331,8 @@ always_comb begin
         else ld_alu_rdy = 1'b1;
       end
       default : begin
-        ld_alu_rdy = 1'b1;
-        st_alu_rdy = 1'b1;
+        ld_alu_rdy = 1'b0;
+        st_alu_rdy = 1'b0;
       end
     endcase
     if(st_alu_rdy) execute_pkt = st_execute_pkt;
@@ -345,7 +352,10 @@ always_comb begin
         else ld_re_arr[i] = 1'b0;
       end
     end
-    else foreach(ld_re_arr[i]) ld_re_arr[i] = 1'b0;
+    else begin
+       foreach(ld_re_arr[i]) ld_re_arr[i] = 1'b0;
+       ld_execute_pkt = '0;
+    end
 end
 
 //agu logic

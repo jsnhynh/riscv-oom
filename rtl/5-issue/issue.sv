@@ -19,8 +19,8 @@ module issue (
     input  logic [NUM_FU-1:0]       fu_rdys,
     output instruction_t            fu_packets      [NUM_FU-1:0],
     
-    input  logic                    dmem_rec_rdy,       // Backpressure to memory
-    output writeback_packet_t       dmem_rec_packet,    // From DMEM
+    input  logic                    dmem_req_rdy,       // Backpressure to memory
+   // output writeback_packet_t       dmem_req_packet,    // From DMEM
 
     // Ports from ROB
     input  logic [TAG_WIDTH-1:0]    commit_store_ids    [PIPE_WIDTH-1:0],
@@ -97,8 +97,8 @@ module issue (
 
         .agu_result(agu_result),
 
-        .alu_rdy(dmem_rec_rdy),     // ?
-        .execute_pkt(dmem_rec_packet),
+        .alu_rdy(dmem_req_rdy),     // ?
+        .execute_pkt(fu_packets[2]),
         .forward_pkt(forward_pkt), 
         .forward_rdy(),
         .forward_re('0),

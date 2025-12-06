@@ -62,19 +62,26 @@ rs rs (
     //CDB PORT 
     .cdb_ports(cdb_ports)
 );
-always_comb begin
-    agu_we = agu_port.is_valid && agu_port.dest_tag == execute_pkt.dest_tag;
-    case ({rs_we, agu_we, fwd_we})
-        3'b100: muxed_rs_entry = rs_entry;
-        3'b010: muxed_rs_entry = agu_rs_entry;
-        3'b001: muxed_rs_entry = fwd_entry; 
-        default: muxed_rs_entry = rs_entry;
-    endcase
-    agu_execute_pkt = execute_pkt;
-    agu_rs_entry = execute_pkt;
-    agu_rs_entry.src_0_a.data = agu_port.result;
-    agu_rs_entry.agu_comp = 1'b1;
-end
+    assign agu_we = agu_port.is_valid && agu_port.dest_tag == execute_pkt.dest_tag;
+    //muxed_rs_entry = '0;
+    // case ({rs_we, agu_we, fwd_we})
+    //     3'b100: muxed_rs_entry = rs_entry;
+    //     3'b010: muxed_rs_entry = agu_rs_entry;
+    //     3'b001: muxed_rs_entry = fwd_entry; 
+    //     default: muxed_rs_entry = rs_entry;
+    // endcase
+    always_comb begin
+        if(rs_we) muxed_rs_entry = rs_entry;
+        else if (agu_we) muxed_rs_entry = agu_rs_entry;
+        else if (fwd_we) muxed_rs_entry = fwd_entry;
+        else muxed_rs_entry = '0;
+    end
+    assign agu_execute_pkt = execute_pkt;
+    always_comb begin  
+        agu_rs_entry = execute_pkt;
+        agu_rs_entry.src_0_a.data = agu_port.result;
+        agu_rs_entry.agu_comp = 1'b1;
+    end
 typedef enum logic [2:0] {
     IDLE,
     WAIT_REG,
