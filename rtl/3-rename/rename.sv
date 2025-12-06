@@ -119,13 +119,18 @@ module rename (
         r_inst.dest_tag     = new_tag;
 
         // Use sources from PRF read (bypass will be applied later)
-        if ((d_inst.src_0_a.tag == d_inst.src_1_a.tag) && ~(d_inst.opcode == OPC_LUI)) begin
+        if ((d_inst.src_0_a.tag == d_inst.src_1_a.tag) && 
+            (d_inst.opcode != OPC_LUI) &&
+            (d_inst.opcode != OPC_AUIPC) &&
+            (d_inst.opcode != OPC_JAL) &&
+            (d_inst.opcode != OPC_BRANCH))
+        begin
             r_inst.src_0_a.data         = rs1_port.data;
             r_inst.src_0_a.tag          = rs1_port.tag;
             r_inst.src_0_a.is_renamed   = rs1_port.is_renamed;
-        end else r_inst.src_0_a.data    = d_inst.src_0_a.data; // Pass PC
+        end else r_inst.src_0_a.data = d_inst.src_0_a.data; // Keep PC/immediate
 
-        if (d_inst.src_0_b.tag == d_inst.src_1_b.tag) begin
+        if ((d_inst.src_0_b.tag == d_inst.src_1_b.tag) && (d_inst.opcode == OPC_ARI_RTYPE)) begin
             r_inst.src_0_b.data         = rs2_port.data;
             r_inst.src_0_b.tag          = rs2_port.tag;
             r_inst.src_0_b.is_renamed   = rs2_port.is_renamed;
@@ -174,26 +179,25 @@ module rename (
         end
 
         // Step 3: Pass Through Sources
-        if (decoded_insts[0].src_0_a.tag == decoded_insts[0].src_1_a.tag) begin
-            renamed_insts_tmp[0].src_0_a.data       = renamed_insts_tmp[0].src_1_a.data;
-            renamed_insts_tmp[0].src_0_a.tag        = renamed_insts_tmp[0].src_1_a.tag;
-            renamed_insts_tmp[0].src_0_a.is_renamed = renamed_insts_tmp[0].src_1_a.is_renamed;
-        end
-        if (decoded_insts[0].src_0_b.tag == decoded_insts[0].src_1_b.tag) begin
-            renamed_insts_tmp[0].src_0_b.data       = renamed_insts_tmp[0].src_1_b.data;
-            renamed_insts_tmp[0].src_0_b.tag        = renamed_insts_tmp[0].src_1_b.tag;
-            renamed_insts_tmp[0].src_0_b.is_renamed = renamed_insts_tmp[0].src_1_b.is_renamed;
-        end
+        // inst[0] - src_0_a pass-through (skip for AUIPC, LUI, JAL, BRANCH)
+        for (integer i = 0; i < PIPE_WIDTH; i++) begin
+            if ((decoded_insts[i].src_0_a.tag == decoded_insts[i].src_1_a.tag) &&
+                (decoded_insts[i].opcode != OPC_AUIPC) && 
+                (decoded_insts[i].opcode != OPC_LUI) &&
+                (decoded_insts[i].opcode != OPC_JAL) &&
+                (decoded_insts[i].opcode != OPC_BRANCH)) begin
+                renamed_insts_tmp[i].src_0_a.data       = renamed_insts_tmp[i].src_1_a.data;
+                renamed_insts_tmp[i].src_0_a.tag        = renamed_insts_tmp[i].src_1_a.tag;
+                renamed_insts_tmp[i].src_0_a.is_renamed = renamed_insts_tmp[i].src_1_a.is_renamed;
+            end
 
-        if (decoded_insts[1].src_0_a.tag == decoded_insts[1].src_1_a.tag) begin
-            renamed_insts_tmp[1].src_0_a.data       = renamed_insts_tmp[1].src_1_a.data;
-            renamed_insts_tmp[1].src_0_a.tag        = renamed_insts_tmp[1].src_1_a.tag;
-            renamed_insts_tmp[1].src_0_a.is_renamed = renamed_insts_tmp[1].src_1_a.is_renamed;
-        end
-        if (decoded_insts[1].src_0_b.tag == decoded_insts[1].src_1_b.tag) begin
-            renamed_insts_tmp[1].src_0_b.data       = renamed_insts_tmp[1].src_1_b.data;
-            renamed_insts_tmp[1].src_0_b.tag        = renamed_insts_tmp[1].src_1_b.tag;
-            renamed_insts_tmp[1].src_0_b.is_renamed = renamed_insts_tmp[1].src_1_b.is_renamed;
+            // inst[i] - src_0_b pass-through (only for R-type, branches keep immediate!)
+            if ((decoded_insts[i].src_0_b.tag == decoded_insts[i].src_1_b.tag) &&
+                (decoded_insts[i].opcode == OPC_ARI_RTYPE)) begin
+                renamed_insts_tmp[i].src_0_b.data       = renamed_insts_tmp[i].src_1_b.data;
+                renamed_insts_tmp[i].src_0_b.tag        = renamed_insts_tmp[i].src_1_b.tag;
+                renamed_insts_tmp[i].src_0_b.is_renamed = renamed_insts_tmp[i].src_1_b.is_renamed;
+            end
         end
 
         // Step 4: Compaction Logic

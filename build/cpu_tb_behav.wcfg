@@ -13,15 +13,15 @@
       </db_ref>
    </db_ref_list>
    <zoom_setting>
-      <ZoomStartTime time="982.708 ns"></ZoomStartTime>
-      <ZoomEndTime time="1,003.959 ns"></ZoomEndTime>
-      <Cursor1Time time="1,000.000 ns"></Cursor1Time>
+      <ZoomStartTime time="280.000 ns"></ZoomStartTime>
+      <ZoomEndTime time="290.301 ns"></ZoomEndTime>
+      <Cursor1Time time="310.000 ns"></Cursor1Time>
    </zoom_setting>
    <column_width_setting>
-      <NameColumnWidth column_width="244"></NameColumnWidth>
-      <ValueColumnWidth column_width="60"></ValueColumnWidth>
+      <NameColumnWidth column_width="447"></NameColumnWidth>
+      <ValueColumnWidth column_width="120"></ValueColumnWidth>
    </column_width_setting>
-   <WVObjectSize size="11" />
+   <WVObjectSize size="13" />
    <wvobject type="array" fp_name="/cpu_tb/cycle_count">
       <obj_property name="ElementShortName">cycle_count[31:0]</obj_property>
       <obj_property name="ObjectShortName">cycle_count[31:0]</obj_property>
@@ -54,9 +54,14 @@
       <obj_property name="CustomSignalColor">#00FF00</obj_property>
       <obj_property name="UseCustomSignalColor">true</obj_property>
    </wvobject>
+   <wvobject type="logic" fp_name="/cpu_tb/dut/core0/flush">
+      <obj_property name="ElementShortName">flush</obj_property>
+      <obj_property name="ObjectShortName">flush</obj_property>
+   </wvobject>
    <wvobject type="group" fp_name="group1136">
       <obj_property name="label">Frontend</obj_property>
       <obj_property name="DisplayName">label</obj_property>
+      <obj_property name="isExpanded"></obj_property>
       <wvobject type="array" fp_name="/cpu_tb/dut/core0/fetch_stage/imem_req_packet">
          <obj_property name="ElementShortName">imem_req_packet[31:0]</obj_property>
          <obj_property name="ObjectShortName">imem_req_packet[31:0]</obj_property>
@@ -110,18 +115,6 @@
             <obj_property name="ObjectShortName">decoded_insts[1:0]</obj_property>
             <obj_property name="CustomSignalColor">#808080</obj_property>
             <obj_property name="UseCustomSignalColor">true</obj_property>
-            <obj_property name="isExpanded"></obj_property>
-            <wvobject type="array" fp_name="/cpu_tb/dut/core0/decode_stage/decoded_insts[1]">
-               <obj_property name="ElementShortName">[1]</obj_property>
-               <obj_property name="ObjectShortName">[1]</obj_property>
-               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
-               <obj_property name="isExpanded"></obj_property>
-            </wvobject>
-            <wvobject type="array" fp_name="/cpu_tb/dut/core0/decode_stage/decoded_insts[0]">
-               <obj_property name="ElementShortName">[0]</obj_property>
-               <obj_property name="ObjectShortName">[0]</obj_property>
-               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
-            </wvobject>
          </wvobject>
       </wvobject>
       <wvobject fp_name="divider18" type="divider">
@@ -139,17 +132,6 @@
             <obj_property name="CustomSignalColor">#808080</obj_property>
             <obj_property name="UseCustomSignalColor">true</obj_property>
             <obj_property name="isExpanded"></obj_property>
-            <wvobject type="array" fp_name="/cpu_tb/dut/core0/rename_stage/renamed_insts[1]">
-               <obj_property name="ElementShortName">[1]</obj_property>
-               <obj_property name="ObjectShortName">[1]</obj_property>
-               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
-               <obj_property name="isExpanded"></obj_property>
-            </wvobject>
-            <wvobject type="array" fp_name="/cpu_tb/dut/core0/rename_stage/renamed_insts[0]">
-               <obj_property name="ElementShortName">[0]</obj_property>
-               <obj_property name="ObjectShortName">[0]</obj_property>
-               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
-            </wvobject>
          </wvobject>
          <wvobject type="array" fp_name="/cpu_tb/dut/core0/rename_stage/rob_alloc_req">
             <obj_property name="ElementShortName">rob_alloc_req[1:0]</obj_property>
@@ -172,6 +154,7 @@
          <wvobject type="array" fp_name="/cpu_tb/dut/core0/rename_stage/prf_inst/data_reg">
             <obj_property name="ElementShortName">data_reg[31:0][31:0]</obj_property>
             <obj_property name="ObjectShortName">data_reg[31:0][31:0]</obj_property>
+            <obj_property name="isExpanded"></obj_property>
          </wvobject>
          <wvobject type="array" fp_name="/cpu_tb/dut/core0/rename_stage/prf_inst/tag_reg">
             <obj_property name="ElementShortName">tag_reg[31:0][4:0]</obj_property>
@@ -196,38 +179,6 @@
             <obj_property name="CustomSignalColor">#808080</obj_property>
             <obj_property name="UseCustomSignalColor">true</obj_property>
             <obj_property name="isExpanded"></obj_property>
-            <wvobject type="array" fp_name="/cpu_tb/dut/core0/dispatch_stage/rs_issue_ports[3]">
-               <obj_property name="ElementShortName">[3][1:0]</obj_property>
-               <obj_property name="ObjectShortName">[3][1:0]</obj_property>
-               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
-            </wvobject>
-            <wvobject type="array" fp_name="/cpu_tb/dut/core0/dispatch_stage/rs_issue_ports[2]">
-               <obj_property name="ElementShortName">[2][1:0]</obj_property>
-               <obj_property name="ObjectShortName">[2][1:0]</obj_property>
-               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
-            </wvobject>
-            <wvobject type="array" fp_name="/cpu_tb/dut/core0/dispatch_stage/rs_issue_ports[1]">
-               <obj_property name="ElementShortName">[1][1:0]</obj_property>
-               <obj_property name="ObjectShortName">[1][1:0]</obj_property>
-               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
-            </wvobject>
-            <wvobject type="array" fp_name="/cpu_tb/dut/core0/dispatch_stage/rs_issue_ports[0]">
-               <obj_property name="ElementShortName">[0][1:0]</obj_property>
-               <obj_property name="ObjectShortName">[0][1:0]</obj_property>
-               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
-               <obj_property name="isExpanded"></obj_property>
-               <wvobject type="array" fp_name="/cpu_tb/dut/core0/dispatch_stage/rs_issue_ports[0][1]">
-                  <obj_property name="ElementShortName">[1]</obj_property>
-                  <obj_property name="ObjectShortName">[1]</obj_property>
-                  <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
-                  <obj_property name="isExpanded"></obj_property>
-               </wvobject>
-               <wvobject type="array" fp_name="/cpu_tb/dut/core0/dispatch_stage/rs_issue_ports[0][0]">
-                  <obj_property name="ElementShortName">[0]</obj_property>
-                  <obj_property name="ObjectShortName">[0]</obj_property>
-                  <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
-               </wvobject>
-            </wvobject>
          </wvobject>
          <wvobject type="array" fp_name="/cpu_tb/dut/core0/dispatch_stage/rs_wes">
             <obj_property name="ElementShortName">rs_wes[3:0][1:0]</obj_property>
@@ -240,17 +191,6 @@
             <obj_property name="ObjectShortName">rob_entries[1:0]</obj_property>
             <obj_property name="CustomSignalColor">#808080</obj_property>
             <obj_property name="UseCustomSignalColor">true</obj_property>
-            <wvobject type="array" fp_name="/cpu_tb/dut/core0/dispatch_stage/rob_entries[1]">
-               <obj_property name="ElementShortName">[1]</obj_property>
-               <obj_property name="ObjectShortName">[1]</obj_property>
-               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
-               <obj_property name="isExpanded"></obj_property>
-            </wvobject>
-            <wvobject type="array" fp_name="/cpu_tb/dut/core0/dispatch_stage/rob_entries[0]">
-               <obj_property name="ElementShortName">[0]</obj_property>
-               <obj_property name="ObjectShortName">[0]</obj_property>
-               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
-            </wvobject>
          </wvobject>
          <wvobject type="array" fp_name="/cpu_tb/dut/core0/dispatch_stage/rob_we">
             <obj_property name="ElementShortName">rob_we[1:0]</obj_property>
@@ -263,7 +203,6 @@
    <wvobject type="group" fp_name="group1142">
       <obj_property name="label">Backend</obj_property>
       <obj_property name="DisplayName">label</obj_property>
-      <obj_property name="isExpanded"></obj_property>
       <wvobject fp_name="divider19" type="divider">
          <obj_property name="label">Issue</obj_property>
          <obj_property name="DisplayName">label</obj_property>
@@ -278,7 +217,6 @@
             <obj_property name="ObjectShortName">fu_packets[4:0]</obj_property>
             <obj_property name="CustomSignalColor">#808080</obj_property>
             <obj_property name="UseCustomSignalColor">true</obj_property>
-            <obj_property name="isExpanded"></obj_property>
          </wvobject>
          <wvobject type="array" fp_name="/cpu_tb/dut/core0/issue_stage/fu_rdys">
             <obj_property name="ElementShortName">fu_rdys[4:0]</obj_property>
@@ -290,46 +228,7 @@
          <wvobject type="array" fp_name="/cpu_tb/dut/core0/issue_stage/alu_rs_isnt/entries">
             <obj_property name="ElementShortName">entries[7:0]</obj_property>
             <obj_property name="ObjectShortName">entries[7:0]</obj_property>
-            <wvobject type="array" fp_name="/cpu_tb/dut/core0/issue_stage/alu_rs_isnt/entries[7]">
-               <obj_property name="ElementShortName">[7]</obj_property>
-               <obj_property name="ObjectShortName">[7]</obj_property>
-               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
-            </wvobject>
-            <wvobject type="array" fp_name="/cpu_tb/dut/core0/issue_stage/alu_rs_isnt/entries[6]">
-               <obj_property name="ElementShortName">[6]</obj_property>
-               <obj_property name="ObjectShortName">[6]</obj_property>
-               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
-            </wvobject>
-            <wvobject type="array" fp_name="/cpu_tb/dut/core0/issue_stage/alu_rs_isnt/entries[5]">
-               <obj_property name="ElementShortName">[5]</obj_property>
-               <obj_property name="ObjectShortName">[5]</obj_property>
-               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
-            </wvobject>
-            <wvobject type="array" fp_name="/cpu_tb/dut/core0/issue_stage/alu_rs_isnt/entries[4]">
-               <obj_property name="ElementShortName">[4]</obj_property>
-               <obj_property name="ObjectShortName">[4]</obj_property>
-               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
-            </wvobject>
-            <wvobject type="array" fp_name="/cpu_tb/dut/core0/issue_stage/alu_rs_isnt/entries[3]">
-               <obj_property name="ElementShortName">[3]</obj_property>
-               <obj_property name="ObjectShortName">[3]</obj_property>
-               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
-            </wvobject>
-            <wvobject type="array" fp_name="/cpu_tb/dut/core0/issue_stage/alu_rs_isnt/entries[2]">
-               <obj_property name="ElementShortName">[2]</obj_property>
-               <obj_property name="ObjectShortName">[2]</obj_property>
-               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
-            </wvobject>
-            <wvobject type="array" fp_name="/cpu_tb/dut/core0/issue_stage/alu_rs_isnt/entries[1]">
-               <obj_property name="ElementShortName">[1]</obj_property>
-               <obj_property name="ObjectShortName">[1]</obj_property>
-               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
-            </wvobject>
-            <wvobject type="array" fp_name="/cpu_tb/dut/core0/issue_stage/alu_rs_isnt/entries[0]">
-               <obj_property name="ElementShortName">[0]</obj_property>
-               <obj_property name="ObjectShortName">[0]</obj_property>
-               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
-            </wvobject>
+            <obj_property name="isExpanded"></obj_property>
          </wvobject>
       </wvobject>
       <wvobject fp_name="divider20" type="divider">
@@ -395,6 +294,172 @@
                <obj_property name="Radix">HEXRADIX</obj_property>
             </wvobject>
          </wvobject>
+         <wvobject type="array" fp_name="/cpu_tb/dut/core0/commit_stage/rob_mem">
+            <obj_property name="ElementShortName">rob_mem[31:0]</obj_property>
+            <obj_property name="ObjectShortName">rob_mem[31:0]</obj_property>
+            <obj_property name="CustomSignalColor">#808080</obj_property>
+            <obj_property name="UseCustomSignalColor">true</obj_property>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/commit_stage/rob_mem[31]">
+               <obj_property name="ElementShortName">[31]</obj_property>
+               <obj_property name="ObjectShortName">[31]</obj_property>
+               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/commit_stage/rob_mem[30]">
+               <obj_property name="ElementShortName">[30]</obj_property>
+               <obj_property name="ObjectShortName">[30]</obj_property>
+               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/commit_stage/rob_mem[29]">
+               <obj_property name="ElementShortName">[29]</obj_property>
+               <obj_property name="ObjectShortName">[29]</obj_property>
+               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/commit_stage/rob_mem[28]">
+               <obj_property name="ElementShortName">[28]</obj_property>
+               <obj_property name="ObjectShortName">[28]</obj_property>
+               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/commit_stage/rob_mem[27]">
+               <obj_property name="ElementShortName">[27]</obj_property>
+               <obj_property name="ObjectShortName">[27]</obj_property>
+               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/commit_stage/rob_mem[26]">
+               <obj_property name="ElementShortName">[26]</obj_property>
+               <obj_property name="ObjectShortName">[26]</obj_property>
+               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/commit_stage/rob_mem[25]">
+               <obj_property name="ElementShortName">[25]</obj_property>
+               <obj_property name="ObjectShortName">[25]</obj_property>
+               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/commit_stage/rob_mem[24]">
+               <obj_property name="ElementShortName">[24]</obj_property>
+               <obj_property name="ObjectShortName">[24]</obj_property>
+               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/commit_stage/rob_mem[23]">
+               <obj_property name="ElementShortName">[23]</obj_property>
+               <obj_property name="ObjectShortName">[23]</obj_property>
+               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/commit_stage/rob_mem[22]">
+               <obj_property name="ElementShortName">[22]</obj_property>
+               <obj_property name="ObjectShortName">[22]</obj_property>
+               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/commit_stage/rob_mem[21]">
+               <obj_property name="ElementShortName">[21]</obj_property>
+               <obj_property name="ObjectShortName">[21]</obj_property>
+               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/commit_stage/rob_mem[20]">
+               <obj_property name="ElementShortName">[20]</obj_property>
+               <obj_property name="ObjectShortName">[20]</obj_property>
+               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/commit_stage/rob_mem[19]">
+               <obj_property name="ElementShortName">[19]</obj_property>
+               <obj_property name="ObjectShortName">[19]</obj_property>
+               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/commit_stage/rob_mem[18]">
+               <obj_property name="ElementShortName">[18]</obj_property>
+               <obj_property name="ObjectShortName">[18]</obj_property>
+               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/commit_stage/rob_mem[17]">
+               <obj_property name="ElementShortName">[17]</obj_property>
+               <obj_property name="ObjectShortName">[17]</obj_property>
+               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/commit_stage/rob_mem[16]">
+               <obj_property name="ElementShortName">[16]</obj_property>
+               <obj_property name="ObjectShortName">[16]</obj_property>
+               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/commit_stage/rob_mem[15]">
+               <obj_property name="ElementShortName">[15]</obj_property>
+               <obj_property name="ObjectShortName">[15]</obj_property>
+               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/commit_stage/rob_mem[14]">
+               <obj_property name="ElementShortName">[14]</obj_property>
+               <obj_property name="ObjectShortName">[14]</obj_property>
+               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/commit_stage/rob_mem[13]">
+               <obj_property name="ElementShortName">[13]</obj_property>
+               <obj_property name="ObjectShortName">[13]</obj_property>
+               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/commit_stage/rob_mem[12]">
+               <obj_property name="ElementShortName">[12]</obj_property>
+               <obj_property name="ObjectShortName">[12]</obj_property>
+               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/commit_stage/rob_mem[11]">
+               <obj_property name="ElementShortName">[11]</obj_property>
+               <obj_property name="ObjectShortName">[11]</obj_property>
+               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/commit_stage/rob_mem[10]">
+               <obj_property name="ElementShortName">[10]</obj_property>
+               <obj_property name="ObjectShortName">[10]</obj_property>
+               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/commit_stage/rob_mem[9]">
+               <obj_property name="ElementShortName">[9]</obj_property>
+               <obj_property name="ObjectShortName">[9]</obj_property>
+               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/commit_stage/rob_mem[8]">
+               <obj_property name="ElementShortName">[8]</obj_property>
+               <obj_property name="ObjectShortName">[8]</obj_property>
+               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/commit_stage/rob_mem[7]">
+               <obj_property name="ElementShortName">[7]</obj_property>
+               <obj_property name="ObjectShortName">[7]</obj_property>
+               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/commit_stage/rob_mem[6]">
+               <obj_property name="ElementShortName">[6]</obj_property>
+               <obj_property name="ObjectShortName">[6]</obj_property>
+               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/commit_stage/rob_mem[5]">
+               <obj_property name="ElementShortName">[5]</obj_property>
+               <obj_property name="ObjectShortName">[5]</obj_property>
+               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/commit_stage/rob_mem[4]">
+               <obj_property name="ElementShortName">[4]</obj_property>
+               <obj_property name="ObjectShortName">[4]</obj_property>
+               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/commit_stage/rob_mem[3]">
+               <obj_property name="ElementShortName">[3]</obj_property>
+               <obj_property name="ObjectShortName">[3]</obj_property>
+               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/commit_stage/rob_mem[2]">
+               <obj_property name="ElementShortName">[2]</obj_property>
+               <obj_property name="ObjectShortName">[2]</obj_property>
+               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/commit_stage/rob_mem[1]">
+               <obj_property name="ElementShortName">[1]</obj_property>
+               <obj_property name="ObjectShortName">[1]</obj_property>
+               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/commit_stage/rob_mem[0]">
+               <obj_property name="ElementShortName">[0]</obj_property>
+               <obj_property name="ObjectShortName">[0]</obj_property>
+               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
+            </wvobject>
+         </wvobject>
       </wvobject>
    </wvobject>
    <wvobject fp_name="divider296" type="divider">
@@ -427,6 +492,7 @@
       <wvobject type="array" fp_name="/cpu_tb/dut/core0/commit_stage/avail_slots">
          <obj_property name="ElementShortName">avail_slots[5:0]</obj_property>
          <obj_property name="ObjectShortName">avail_slots[5:0]</obj_property>
+         <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
       </wvobject>
       <wvobject type="array" fp_name="/cpu_tb/dut/core0/commit_stage/reserved_cnt">
          <obj_property name="ElementShortName">reserved_cnt[1:0]</obj_property>
@@ -452,12 +518,6 @@
          <obj_property name="ElementShortName">commit_write_ports[1:0]</obj_property>
          <obj_property name="ObjectShortName">commit_write_ports[1:0]</obj_property>
          <obj_property name="isExpanded"></obj_property>
-      </wvobject>
-      <wvobject type="array" fp_name="/cpu_tb/dut/core0/commit_stage/rob_mem">
-         <obj_property name="ElementShortName">rob_mem[31:0]</obj_property>
-         <obj_property name="ObjectShortName">rob_mem[31:0]</obj_property>
-         <obj_property name="CustomSignalColor">#808080</obj_property>
-         <obj_property name="UseCustomSignalColor">true</obj_property>
       </wvobject>
    </wvobject>
    <wvobject type="group" fp_name="group287">
@@ -496,12 +556,10 @@
          <wvobject type="array" fp_name="/cpu_tb/dut/core0/execute_stage/\gen_alu[0].alu_inst /alu_packet_q.src_0_a">
             <obj_property name="ElementShortName">.src_0_a</obj_property>
             <obj_property name="ObjectShortName">.src_0_a</obj_property>
-            <obj_property name="Radix">HEXRADIX</obj_property>
          </wvobject>
          <wvobject type="array" fp_name="/cpu_tb/dut/core0/execute_stage/\gen_alu[0].alu_inst /alu_packet_q.src_0_b">
             <obj_property name="ElementShortName">.src_0_b</obj_property>
             <obj_property name="ObjectShortName">.src_0_b</obj_property>
-            <obj_property name="Radix">HEXRADIX</obj_property>
          </wvobject>
          <wvobject type="array" fp_name="/cpu_tb/dut/core0/execute_stage/\gen_alu[0].alu_inst /alu_packet_q.uop_0">
             <obj_property name="ElementShortName">.uop_0[2:0]</obj_property>
@@ -674,6 +732,249 @@
       <wvobject type="array" fp_name="/cpu_tb/dut/core0/execute_stage/\gen_alu[1].alu_inst /alu_result">
          <obj_property name="ElementShortName">alu_result</obj_property>
          <obj_property name="ObjectShortName">alu_result</obj_property>
+      </wvobject>
+   </wvobject>
+   <wvobject type="group" fp_name="group253">
+      <obj_property name="label">RENAME</obj_property>
+      <obj_property name="DisplayName">label</obj_property>
+      <wvobject type="logic" fp_name="/cpu_tb/dut/core0/rename_stage/clk">
+         <obj_property name="ElementShortName">clk</obj_property>
+         <obj_property name="ObjectShortName">clk</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/cpu_tb/dut/core0/rename_stage/rst">
+         <obj_property name="ElementShortName">rst</obj_property>
+         <obj_property name="ObjectShortName">rst</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/cpu_tb/dut/core0/rename_stage/flush">
+         <obj_property name="ElementShortName">flush</obj_property>
+         <obj_property name="ObjectShortName">flush</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/cpu_tb/dut/core0/rename_stage/rename_rdy">
+         <obj_property name="ElementShortName">rename_rdy</obj_property>
+         <obj_property name="ObjectShortName">rename_rdy</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/cpu_tb/dut/core0/rename_stage/decoded_insts">
+         <obj_property name="ElementShortName">decoded_insts[1:0]</obj_property>
+         <obj_property name="ObjectShortName">decoded_insts[1:0]</obj_property>
+         <wvobject type="array" fp_name="/cpu_tb/dut/core0/rename_stage/decoded_insts[1]">
+            <obj_property name="ElementShortName">[1]</obj_property>
+            <obj_property name="ObjectShortName">[1]</obj_property>
+            <obj_property name="isExpanded"></obj_property>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/rename_stage/decoded_insts[1].pc">
+               <obj_property name="ElementShortName">.pc[31:0]</obj_property>
+               <obj_property name="ObjectShortName">.pc[31:0]</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/rename_stage/decoded_insts[1].rd">
+               <obj_property name="ElementShortName">.rd[4:0]</obj_property>
+               <obj_property name="ObjectShortName">.rd[4:0]</obj_property>
+               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/rename_stage/decoded_insts[1].dest_tag">
+               <obj_property name="ElementShortName">.dest_tag[4:0]</obj_property>
+               <obj_property name="ObjectShortName">.dest_tag[4:0]</obj_property>
+               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/rename_stage/decoded_insts[1].src_0_a">
+               <obj_property name="ElementShortName">.src_0_a</obj_property>
+               <obj_property name="ObjectShortName">.src_0_a</obj_property>
+               <obj_property name="CustomSignalColor">#FF00FF</obj_property>
+               <obj_property name="UseCustomSignalColor">true</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/rename_stage/decoded_insts[1].src_0_b">
+               <obj_property name="ElementShortName">.src_0_b</obj_property>
+               <obj_property name="ObjectShortName">.src_0_b</obj_property>
+               <obj_property name="CustomSignalColor">#FF00FF</obj_property>
+               <obj_property name="UseCustomSignalColor">true</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/rename_stage/decoded_insts[1].uop_0">
+               <obj_property name="ElementShortName">.uop_0[2:0]</obj_property>
+               <obj_property name="ObjectShortName">.uop_0[2:0]</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/rename_stage/decoded_insts[1].src_1_a">
+               <obj_property name="ElementShortName">.src_1_a</obj_property>
+               <obj_property name="ObjectShortName">.src_1_a</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/rename_stage/decoded_insts[1].src_1_b">
+               <obj_property name="ElementShortName">.src_1_b</obj_property>
+               <obj_property name="ObjectShortName">.src_1_b</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/rename_stage/decoded_insts[1].uop_1">
+               <obj_property name="ElementShortName">.uop_1[2:0]</obj_property>
+               <obj_property name="ObjectShortName">.uop_1[2:0]</obj_property>
+            </wvobject>
+            <wvobject type="logic" fp_name="/cpu_tb/dut/core0/rename_stage/decoded_insts[1].is_valid">
+               <obj_property name="ElementShortName">.is_valid</obj_property>
+               <obj_property name="ObjectShortName">.is_valid</obj_property>
+            </wvobject>
+            <wvobject type="logic" fp_name="/cpu_tb/dut/core0/rename_stage/decoded_insts[1].has_rd">
+               <obj_property name="ElementShortName">.has_rd</obj_property>
+               <obj_property name="ObjectShortName">.has_rd</obj_property>
+            </wvobject>
+            <wvobject type="logic" fp_name="/cpu_tb/dut/core0/rename_stage/decoded_insts[1].br_taken">
+               <obj_property name="ElementShortName">.br_taken</obj_property>
+               <obj_property name="ObjectShortName">.br_taken</obj_property>
+            </wvobject>
+            <wvobject type="logic" fp_name="/cpu_tb/dut/core0/rename_stage/decoded_insts[1].agu_comp">
+               <obj_property name="ElementShortName">.agu_comp</obj_property>
+               <obj_property name="ObjectShortName">.agu_comp</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/rename_stage/decoded_insts[1].opcode">
+               <obj_property name="ElementShortName">.opcode[6:0]</obj_property>
+               <obj_property name="ObjectShortName">.opcode[6:0]</obj_property>
+               <obj_property name="Radix">BINARYRADIX</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/rename_stage/decoded_insts[1].funct7">
+               <obj_property name="ElementShortName">.funct7[6:0]</obj_property>
+               <obj_property name="ObjectShortName">.funct7[6:0]</obj_property>
+            </wvobject>
+         </wvobject>
+         <wvobject type="array" fp_name="/cpu_tb/dut/core0/rename_stage/decoded_insts[0]">
+            <obj_property name="ElementShortName">[0]</obj_property>
+            <obj_property name="ObjectShortName">[0]</obj_property>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/rename_stage/decoded_insts[0].pc">
+               <obj_property name="ElementShortName">.pc[31:0]</obj_property>
+               <obj_property name="ObjectShortName">.pc[31:0]</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/rename_stage/decoded_insts[0].rd">
+               <obj_property name="ElementShortName">.rd[4:0]</obj_property>
+               <obj_property name="ObjectShortName">.rd[4:0]</obj_property>
+               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/rename_stage/decoded_insts[0].dest_tag">
+               <obj_property name="ElementShortName">.dest_tag[4:0]</obj_property>
+               <obj_property name="ObjectShortName">.dest_tag[4:0]</obj_property>
+               <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/rename_stage/decoded_insts[0].src_0_a">
+               <obj_property name="ElementShortName">.src_0_a</obj_property>
+               <obj_property name="ObjectShortName">.src_0_a</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/rename_stage/decoded_insts[0].src_0_b">
+               <obj_property name="ElementShortName">.src_0_b</obj_property>
+               <obj_property name="ObjectShortName">.src_0_b</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/rename_stage/decoded_insts[0].uop_0">
+               <obj_property name="ElementShortName">.uop_0[2:0]</obj_property>
+               <obj_property name="ObjectShortName">.uop_0[2:0]</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/rename_stage/decoded_insts[0].src_1_a">
+               <obj_property name="ElementShortName">.src_1_a</obj_property>
+               <obj_property name="ObjectShortName">.src_1_a</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/rename_stage/decoded_insts[0].src_1_b">
+               <obj_property name="ElementShortName">.src_1_b</obj_property>
+               <obj_property name="ObjectShortName">.src_1_b</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/rename_stage/decoded_insts[0].uop_1">
+               <obj_property name="ElementShortName">.uop_1[2:0]</obj_property>
+               <obj_property name="ObjectShortName">.uop_1[2:0]</obj_property>
+            </wvobject>
+            <wvobject type="logic" fp_name="/cpu_tb/dut/core0/rename_stage/decoded_insts[0].is_valid">
+               <obj_property name="ElementShortName">.is_valid</obj_property>
+               <obj_property name="ObjectShortName">.is_valid</obj_property>
+            </wvobject>
+            <wvobject type="logic" fp_name="/cpu_tb/dut/core0/rename_stage/decoded_insts[0].has_rd">
+               <obj_property name="ElementShortName">.has_rd</obj_property>
+               <obj_property name="ObjectShortName">.has_rd</obj_property>
+            </wvobject>
+            <wvobject type="logic" fp_name="/cpu_tb/dut/core0/rename_stage/decoded_insts[0].br_taken">
+               <obj_property name="ElementShortName">.br_taken</obj_property>
+               <obj_property name="ObjectShortName">.br_taken</obj_property>
+            </wvobject>
+            <wvobject type="logic" fp_name="/cpu_tb/dut/core0/rename_stage/decoded_insts[0].agu_comp">
+               <obj_property name="ElementShortName">.agu_comp</obj_property>
+               <obj_property name="ObjectShortName">.agu_comp</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/rename_stage/decoded_insts[0].opcode">
+               <obj_property name="ElementShortName">.opcode[6:0]</obj_property>
+               <obj_property name="ObjectShortName">.opcode[6:0]</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/rename_stage/decoded_insts[0].funct7">
+               <obj_property name="ElementShortName">.funct7[6:0]</obj_property>
+               <obj_property name="ObjectShortName">.funct7[6:0]</obj_property>
+            </wvobject>
+         </wvobject>
+      </wvobject>
+      <wvobject type="logic" fp_name="/cpu_tb/dut/core0/rename_stage/dispatch_rdy">
+         <obj_property name="ElementShortName">dispatch_rdy</obj_property>
+         <obj_property name="ObjectShortName">dispatch_rdy</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/cpu_tb/dut/core0/rename_stage/renamed_insts">
+         <obj_property name="ElementShortName">renamed_insts[1:0]</obj_property>
+         <obj_property name="ObjectShortName">renamed_insts[1:0]</obj_property>
+         <wvobject type="array" fp_name="/cpu_tb/dut/core0/rename_stage/renamed_insts[1]">
+            <obj_property name="ElementShortName">[1]</obj_property>
+            <obj_property name="ObjectShortName">[1]</obj_property>
+            <obj_property name="isExpanded"></obj_property>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/rename_stage/renamed_insts[1].pc">
+               <obj_property name="ElementShortName">.pc[31:0]</obj_property>
+               <obj_property name="ObjectShortName">.pc[31:0]</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/rename_stage/renamed_insts[1].rd">
+               <obj_property name="ElementShortName">.rd[4:0]</obj_property>
+               <obj_property name="ObjectShortName">.rd[4:0]</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/rename_stage/renamed_insts[1].dest_tag">
+               <obj_property name="ElementShortName">.dest_tag[4:0]</obj_property>
+               <obj_property name="ObjectShortName">.dest_tag[4:0]</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/rename_stage/renamed_insts[1].src_0_a">
+               <obj_property name="ElementShortName">.src_0_a</obj_property>
+               <obj_property name="ObjectShortName">.src_0_a</obj_property>
+               <obj_property name="CustomSignalColor">#FF00FF</obj_property>
+               <obj_property name="UseCustomSignalColor">true</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/rename_stage/renamed_insts[1].src_0_b">
+               <obj_property name="ElementShortName">.src_0_b</obj_property>
+               <obj_property name="ObjectShortName">.src_0_b</obj_property>
+               <obj_property name="CustomSignalColor">#FF00FF</obj_property>
+               <obj_property name="UseCustomSignalColor">true</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/rename_stage/renamed_insts[1].uop_0">
+               <obj_property name="ElementShortName">.uop_0[2:0]</obj_property>
+               <obj_property name="ObjectShortName">.uop_0[2:0]</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/rename_stage/renamed_insts[1].src_1_a">
+               <obj_property name="ElementShortName">.src_1_a</obj_property>
+               <obj_property name="ObjectShortName">.src_1_a</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/rename_stage/renamed_insts[1].src_1_b">
+               <obj_property name="ElementShortName">.src_1_b</obj_property>
+               <obj_property name="ObjectShortName">.src_1_b</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/rename_stage/renamed_insts[1].uop_1">
+               <obj_property name="ElementShortName">.uop_1[2:0]</obj_property>
+               <obj_property name="ObjectShortName">.uop_1[2:0]</obj_property>
+            </wvobject>
+            <wvobject type="logic" fp_name="/cpu_tb/dut/core0/rename_stage/renamed_insts[1].is_valid">
+               <obj_property name="ElementShortName">.is_valid</obj_property>
+               <obj_property name="ObjectShortName">.is_valid</obj_property>
+            </wvobject>
+            <wvobject type="logic" fp_name="/cpu_tb/dut/core0/rename_stage/renamed_insts[1].has_rd">
+               <obj_property name="ElementShortName">.has_rd</obj_property>
+               <obj_property name="ObjectShortName">.has_rd</obj_property>
+            </wvobject>
+            <wvobject type="logic" fp_name="/cpu_tb/dut/core0/rename_stage/renamed_insts[1].br_taken">
+               <obj_property name="ElementShortName">.br_taken</obj_property>
+               <obj_property name="ObjectShortName">.br_taken</obj_property>
+            </wvobject>
+            <wvobject type="logic" fp_name="/cpu_tb/dut/core0/rename_stage/renamed_insts[1].agu_comp">
+               <obj_property name="ElementShortName">.agu_comp</obj_property>
+               <obj_property name="ObjectShortName">.agu_comp</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/rename_stage/renamed_insts[1].opcode">
+               <obj_property name="ElementShortName">.opcode[6:0]</obj_property>
+               <obj_property name="ObjectShortName">.opcode[6:0]</obj_property>
+            </wvobject>
+            <wvobject type="array" fp_name="/cpu_tb/dut/core0/rename_stage/renamed_insts[1].funct7">
+               <obj_property name="ElementShortName">.funct7[6:0]</obj_property>
+               <obj_property name="ObjectShortName">.funct7[6:0]</obj_property>
+            </wvobject>
+         </wvobject>
+         <wvobject type="array" fp_name="/cpu_tb/dut/core0/rename_stage/renamed_insts[0]">
+            <obj_property name="ElementShortName">[0]</obj_property>
+            <obj_property name="ObjectShortName">[0]</obj_property>
+         </wvobject>
       </wvobject>
    </wvobject>
 </wave_config>

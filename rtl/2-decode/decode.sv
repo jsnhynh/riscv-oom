@@ -52,16 +52,26 @@ module decode (
         instruction_t d_inst;
         // Default values
         d_inst = '{default:'0};
-
         d_inst.pc       = pc;
-        d_inst.rd       = rd;
-
-        d_inst.uop_0    = funct3;
-        
-        d_inst.src_1_a.tag  = rs1;
-        d_inst.src_1_b.tag  = rs2;
-
         d_inst.opcode   = inst[6:0];
+
+        casez (d_inst.opcode)
+            OPC_STORE, OPC_BRANCH: 
+                        d_inst.rd = '0;
+            default:    d_inst.rd = rd;
+        endcase
+
+        casez (d_inst.opcode)
+            OPC_AUIPC, OPC_JAL, OPC_LUI: 
+                        d_inst.src_1_a.tag = '0;
+            default:    d_inst.src_1_a.tag = rs1;
+        endcase
+
+        casez (d_inst.opcode)
+            OPC_ARI_ITYPE, OPC_JAL, OPC_JALR: 
+                        d_inst.src_1_b.tag = '0;
+            default:    d_inst.src_1_b.tag = rs2;
+        endcase
 
         casez (d_inst.opcode)  // Instructions are valid if sent from buffer and compliant opcode
             OPC_LUI, OPC_AUIPC, OPC_JAL, OPC_JALR, OPC_BRANCH, OPC_LOAD, OPC_STORE, OPC_ARI_ITYPE, OPC_ARI_RTYPE, OPC_CSR:
@@ -70,8 +80,10 @@ module decode (
         endcase
         
         casez (d_inst.opcode)
-            OPC_LUI, OPC_AUIPC, OPC_JAL, OPC_JALR, OPC_LOAD, OPC_ARI_ITYPE, OPC_ARI_RTYPE:
+            OPC_LUI, OPC_AUIPC, OPC_JAL, OPC_JALR, OPC_LOAD, OPC_ARI_ITYPE, OPC_ARI_RTYPE: begin
                         d_inst.has_rd = 1'b1;
+                        d_inst.rd = rd;
+            end
             default:    d_inst.has_rd = 1'b0;
         endcase
 

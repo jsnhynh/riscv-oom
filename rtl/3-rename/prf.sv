@@ -59,38 +59,35 @@ module prf (
                 renamed_reg[i] <= '0;
                 tag_reg[i]     <= '0;
             end
-        end else if (flush) begin
-            for (int i = 0; i < ARCH_REGS; i++) begin
-                renamed_reg[i] <= 1'b0;
-            end
         end else begin
             // --- Commit Stage Writes ---
-            if (commit_write_ports[0].we && commit_write_ports[0].addr != 0) begin
-                data_reg[commit_write_ports[0].addr] <= commit_write_ports[0].data;
-                if (renamed_reg[commit_write_ports[0].addr] && (tag_reg[commit_write_ports[0].addr] == commit_write_ports[0].tag)) begin
-                    renamed_reg[commit_write_ports[0].addr] <= 1'b0;
-                    tag_reg[commit_write_ports[0].addr]     <= 1'b0;
+            for (integer i = 0; i < PIPE_WIDTH; i++) begin
+                if (commit_write_ports[i].we && commit_write_ports[i].addr != 0) begin
+                    data_reg[commit_write_ports[i].addr] <= commit_write_ports[i].data;
+                    if (renamed_reg[commit_write_ports[i].addr] && (tag_reg[commit_write_ports[i].addr] == commit_write_ports[i].tag)) begin
+                        renamed_reg[commit_write_ports[i].addr] <= 1'b0;
+                        tag_reg[commit_write_ports[i].addr]     <= 1'b0;
+                    end
                 end
             end
+
+            if (~flush) begin
+                // --- Rename Stage Writes ---
+                for (integer i = 0; i < PIPE_WIDTH; i++) begin
+                    if (rat_write_ports[i].we && rat_write_ports[i].addr != 0) begin
+                        tag_reg[rat_write_ports[i].addr]     <= rat_write_ports[i].tag;
+                        renamed_reg[rat_write_ports[i].addr] <= 1'b1;
+                    end
+                end
+            end else begin
+                // --- Clear Renames ---
+                for (int i = 0; i < ARCH_REGS; i++) begin
+                    renamed_reg[i]  <= 1'b0;
+                    tag_reg[i]      <= '0;
+                end
+            end
+
             
-            if (commit_write_ports[1].we && commit_write_ports[1].addr != 0) begin
-                data_reg[commit_write_ports[1].addr] <= commit_write_ports[1].data;
-                if (renamed_reg[commit_write_ports[1].addr] && (tag_reg[commit_write_ports[1].addr] == commit_write_ports[1].tag)) begin
-                    renamed_reg[commit_write_ports[1].addr] <= 1'b0;
-                    tag_reg[commit_write_ports[1].addr]     <= 1'b0;  // FIXED: was [0], now [1]
-                end
-            end
-
-            // --- Rename Stage Writes ---
-            if (rat_write_ports[0].we && rat_write_ports[0].addr != 0) begin
-                tag_reg[rat_write_ports[0].addr]     <= rat_write_ports[0].tag;
-                renamed_reg[rat_write_ports[0].addr] <= 1'b1;
-            end
-
-            if (rat_write_ports[1].we && rat_write_ports[1].addr != 0) begin
-                tag_reg[rat_write_ports[1].addr]     <= rat_write_ports[1].tag;
-                renamed_reg[rat_write_ports[1].addr] <= 1'b1;
-            end
         end
     end
 
