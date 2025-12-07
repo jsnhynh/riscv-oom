@@ -163,23 +163,31 @@ always_comb begin
           ld_sel_arr[i] = 2'd0;
           ld_we_arr[i] = 1'd0;
         end
-        //total open and ready entries
-        if(|ld_write_rdy_arr) ld_total_open_entries += ld_write_rdy_arr[i];
-        else ld_total_open_entries = '0;
-        if(|ld_read_rdy_arr) ld_total_ready_entries += ld_read_rdy_arr[i];
-        else ld_total_ready_entries = '0;
-        //muxing either the 0th or 1st entry inputs, based on sel_arr which one hot encoded
-        if(ld_sel_arr[i] == 2'd0 ||ld_sel_arr[i] == 2'b11 ) mux_ld_entry_arr[i] = '0;
-        else if (ld_sel_arr[i] == 2'b01) mux_ld_entry_arr[i] = ld_lsq_entry[0];
-        else if (ld_sel_arr[i] == 2'b10) mux_ld_entry_arr[i] = ld_lsq_entry[1];
     end
-
-    for(int i = 0; i < PIPE_WIDTH; i++) ld_lsq_rdy[i] = (ld_total_open_entries > i + 1) ? 1 : 0;
-
-    //outputs
-    
-    
 end
+always_comb begin
+    for(int i = 0; i < PIPE_WIDTH; i++) ld_lsq_rdy[i] = (ld_total_open_entries > i + 1) ? 1 : 0; 
+end
+
+
+
+always_comb begin
+  ld_total_open_entries = '0;
+    ld_total_ready_entries = '0;
+  for(int i = 0; i < RS_SIZE; i++) begin
+    ld_total_open_entries += ld_write_rdy_arr[i];
+    ld_total_ready_entries += ld_read_rdy_arr[i];
+  end
+end
+
+always_comb begin
+  for(int i = 0; i < RS_SIZE; i++) begin
+    if(ld_sel_arr[i] == 2'd0 ||ld_sel_arr[i] == 2'b11 ) mux_ld_entry_arr[i] = '0;
+    else if (ld_sel_arr[i] == 2'b01) mux_ld_entry_arr[i] = ld_lsq_entry[0];
+    else if (ld_sel_arr[i] == 2'b10) mux_ld_entry_arr[i] = ld_lsq_entry[1];
+  end
+end
+
 
 //logic to select open reservation stations and write to them
 //if possible  select lowest  2 reservation stations
