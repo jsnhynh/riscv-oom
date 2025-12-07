@@ -120,7 +120,7 @@ module dispatch_tb;
         $dumpvars(0, dispatch_tb);
         
         $display("========================================");
-        $display("  Dispatch Stage Testbench Started");
+        $display("  Dispatch Stage Testbench (with Compaction)");
         $display("========================================\n");
         
         init_signals();
@@ -162,9 +162,10 @@ module dispatch_tb;
         $display("");
         
         //-------------------------------------------------------------
-        // TEST 2: Two ALU Instructions
+        // TEST 2: Two ALU Instructions (SAME RS - No Compaction)
         //-------------------------------------------------------------
-        $display("[TEST 2] Two ALU Instructions Dispatch");
+        $display("[TEST 2] Two ALU Instructions (SAME RS - No Compaction)");
+        $display("  inst[0]=ALU, inst[1]=ALU → Same RS, use ch0 and ch1");
         
         create_renamed_inst(renamed_insts_i[0], 32'h1004, 5'd5, 1'b1, OPC_ARI_RTYPE, 7'b0000000, 5'd11);
         create_renamed_inst(renamed_insts_i[1], 32'h1008, 5'd6, 1'b1, OPC_ARI_ITYPE, 7'b0000000, 5'd12);
@@ -174,9 +175,17 @@ module dispatch_tb;
         
         #1;
         
-        check_assertion("Both ALU writes",
+        check_assertion("Both ALU writes (ch0 and ch1)",
                        rs_wes_o[RS_ALU] == 2'b11,
                        $sformatf("Expected rs_wes[ALU]=11, got %b", rs_wes_o[RS_ALU]));
+        
+        check_assertion("ALU port[0] receives inst[0]",
+                       rs_issue_ports_o[RS_ALU][0].pc == 32'h1004,
+                       $sformatf("Expected ALU port[0] pc=1004, got %h", rs_issue_ports_o[RS_ALU][0].pc));
+        
+        check_assertion("ALU port[1] receives inst[1]",
+                       rs_issue_ports_o[RS_ALU][1].pc == 32'h1008,
+                       $sformatf("Expected ALU port[1] pc=1008, got %h", rs_issue_ports_o[RS_ALU][1].pc));
         
         check_assertion("Both ROB writes",
                        rob_we_o == 2'b11,
@@ -254,9 +263,11 @@ module dispatch_tb;
         $display("");
         
         //-------------------------------------------------------------
-        // TEST 6: Mixed Instructions (ALU + Load)
+        // TEST 6: ALU + LOAD (DIFFERENT RS - COMPACTION!)
         //-------------------------------------------------------------
-        $display("[TEST 6] Mixed Instructions (ALU + Load)");
+        $display("[TEST 6] ALU + LOAD (DIFFERENT RS - COMPACTION!)");
+        $display("  inst[0]=ALU, inst[1]=LOAD → Different RS, should compact!");
+        $display("  Expected: ALU ch0, LOAD ch0 (compacted!)");
         
         create_renamed_inst(renamed_insts_i[0], 32'h1018, 5'd9, 1'b1, OPC_ARI_RTYPE, 7'b0000000, 5'd16);
         create_renamed_inst(renamed_insts_i[1], 32'h101C, 5'd10, 1'b1, OPC_LOAD, 7'b0000000, 5'd17);
@@ -266,30 +277,155 @@ module dispatch_tb;
         
         #1;
         
-        check_assertion("ALU write for inst[0]",
-                       rs_wes_o[RS_ALU][0] == 1'b1,
-                       $sformatf("Expected rs_wes[ALU][0]=1, got %b", rs_wes_o[RS_ALU][0]));
+        check_assertion("ALU write to channel 0 only",
+                       rs_wes_o[RS_ALU] == 2'b01,
+                       $sformatf("Expected rs_wes[ALU]=01, got %b", rs_wes_o[RS_ALU]));
         
-        check_assertion("LSQ LD write for inst[1]",
-                       rs_wes_o[RS_LD][1] == 1'b1,
-                       $sformatf("Expected rs_wes[LD][1]=1, got %b", rs_wes_o[RS_LD][1]));
+        check_assertion("LOAD write to channel 0 (COMPACTED!)",
+                       rs_wes_o[RS_LD] == 2'b01,
+                       $sformatf("Expected rs_wes[LD]=01 (compacted), got %b", rs_wes_o[RS_LD]));
+        
+        check_assertion("LOAD NOT to channel 1",
+                       rs_wes_o[RS_LD][1] == 1'b0,
+                       $sformatf("Expected rs_wes[LD][1]=0 (no ch1 with compaction), got %b", rs_wes_o[RS_LD][1]));
         
         check_assertion("Both ROB writes",
                        rob_we_o == 2'b11,
                        $sformatf("Expected rob_we=11, got %b", rob_we_o));
         
+        check_assertion("LSQ port[0] receives inst[1] (LOAD)",
+                       rs_issue_ports_o[RS_LD][0].pc == 32'h101C,
+                       $sformatf("Expected LSQ port[0] to get LOAD (pc=101C), got pc=%h", rs_issue_ports_o[RS_LD][0].pc));
+        
         $display("");
         
         //-------------------------------------------------------------
-        // TEST 7: ALU RS Full (slot 0 only available)
+        // TEST 7: LOAD + ALU (DIFFERENT RS - COMPACTION!)
         //-------------------------------------------------------------
-        $display("[TEST 7] ALU RS Partial Availability - Should Stall");
-        $display("  Two ALU instructions, but only slot[0] available");
+        $display("[TEST 7] LOAD + ALU (DIFFERENT RS - COMPACTION!)");
+        $display("  inst[0]=LOAD, inst[1]=ALU → Different RS, should compact!");
+        $display("  Expected: LOAD ch0, ALU ch0 (compacted!)");
         
-        create_renamed_inst(renamed_insts_i[0], 32'h1020, 5'd11, 1'b1, OPC_ARI_RTYPE, 7'b0000000, 5'd18);
-        create_renamed_inst(renamed_insts_i[1], 32'h1024, 5'd12, 1'b1, OPC_ARI_RTYPE, 7'b0000000, 5'd19);
+        create_renamed_inst(renamed_insts_i[0], 32'h1020, 5'd11, 1'b1, OPC_LOAD, 7'b0000000, 5'd18);
+        create_renamed_inst(renamed_insts_i[1], 32'h1024, 5'd12, 1'b1, OPC_ARI_ITYPE, 7'b0000000, 5'd19);
         
-        rs_rdys_i[RS_ALU] = 2'b01;  // Only slot[0] available
+        for (int i = 0; i < NUM_RS; i++) rs_rdys_i[i] = 2'b11;
+        rob_rdy_i = 2'b11;
+        
+        #1;
+        
+        check_assertion("LOAD write to channel 0 only",
+                       rs_wes_o[RS_LD] == 2'b01,
+                       $sformatf("Expected rs_wes[LD]=01, got %b", rs_wes_o[RS_LD]));
+        
+        check_assertion("ALU write to channel 0 (COMPACTED!)",
+                       rs_wes_o[RS_ALU] == 2'b01,
+                       $sformatf("Expected rs_wes[ALU]=01 (compacted), got %b", rs_wes_o[RS_ALU]));
+        
+        check_assertion("ALU NOT to channel 1",
+                       rs_wes_o[RS_ALU][1] == 1'b0,
+                       $sformatf("Expected rs_wes[ALU][1]=0 (no ch1 with compaction), got %b", rs_wes_o[RS_ALU][1]));
+        
+        check_assertion("ALU port[0] receives inst[1] (ALU)",
+                       rs_issue_ports_o[RS_ALU][0].pc == 32'h1024,
+                       $sformatf("Expected ALU port[0] to get ALU inst (pc=1024), got pc=%h", rs_issue_ports_o[RS_ALU][0].pc));
+        
+        $display("");
+        
+        //-------------------------------------------------------------
+        // TEST 8: ALU + MDU (DIFFERENT RS - COMPACTION!)
+        //-------------------------------------------------------------
+        $display("[TEST 8] ALU + MDU (DIFFERENT RS - COMPACTION!)");
+        $display("  inst[0]=ALU, inst[1]=MDU → Different RS, should compact!");
+        
+        create_renamed_inst(renamed_insts_i[0], 32'h1028, 5'd13, 1'b1, OPC_ARI_RTYPE, 7'b0000000, 5'd20);
+        create_renamed_inst(renamed_insts_i[1], 32'h102C, 5'd14, 1'b1, OPC_ARI_RTYPE, FNC7_MULDIV, 5'd21);
+        
+        for (int i = 0; i < NUM_RS; i++) rs_rdys_i[i] = 2'b11;
+        rob_rdy_i = 2'b11;
+        
+        #1;
+        
+        check_assertion("ALU write to channel 0 only",
+                       rs_wes_o[RS_ALU] == 2'b01,
+                       $sformatf("Expected rs_wes[ALU]=01, got %b", rs_wes_o[RS_ALU]));
+        
+        check_assertion("MDU write to channel 0 (COMPACTED!)",
+                       rs_wes_o[RS_MDU] == 2'b01,
+                       $sformatf("Expected rs_wes[MDU]=01 (compacted), got %b", rs_wes_o[RS_MDU]));
+        
+        check_assertion("MDU port[0] receives inst[1]",
+                       rs_issue_ports_o[RS_MDU][0].pc == 32'h102C,
+                       $sformatf("Expected MDU port[0] pc=102C, got %h", rs_issue_ports_o[RS_MDU][0].pc));
+        
+        $display("");
+        
+        //-------------------------------------------------------------
+        // TEST 9: LOAD + LOAD (SAME RS - No Compaction)
+        //-------------------------------------------------------------
+        $display("[TEST 9] LOAD + LOAD (SAME RS - No Compaction)");
+        $display("  inst[0]=LOAD, inst[1]=LOAD → Same RS, use ch0 and ch1");
+        
+        create_renamed_inst(renamed_insts_i[0], 32'h1030, 5'd15, 1'b1, OPC_LOAD, 7'b0000000, 5'd22);
+        create_renamed_inst(renamed_insts_i[1], 32'h1034, 5'd16, 1'b1, OPC_LOAD, 7'b0000000, 5'd23);
+        
+        for (int i = 0; i < NUM_RS; i++) rs_rdys_i[i] = 2'b11;
+        rob_rdy_i = 2'b11;
+        
+        #1;
+        
+        check_assertion("Both LOAD writes (ch0 and ch1)",
+                       rs_wes_o[RS_LD] == 2'b11,
+                       $sformatf("Expected rs_wes[LD]=11, got %b", rs_wes_o[RS_LD]));
+        
+        check_assertion("LSQ port[0] receives inst[0]",
+                       rs_issue_ports_o[RS_LD][0].pc == 32'h1030,
+                       $sformatf("Expected LSQ port[0] pc=1030, got %h", rs_issue_ports_o[RS_LD][0].pc));
+        
+        check_assertion("LSQ port[1] receives inst[1]",
+                       rs_issue_ports_o[RS_LD][1].pc == 32'h1034,
+                       $sformatf("Expected LSQ port[1] pc=1034, got %h", rs_issue_ports_o[RS_LD][1].pc));
+        
+        $display("");
+        
+        //-------------------------------------------------------------
+        // TEST 10: Compaction with Limited Resources
+        //-------------------------------------------------------------
+        $display("[TEST 10] Compaction with Limited Resources");
+        $display("  ALU + LOAD, but LOAD RS only has ch0 available");
+        $display("  Should dispatch successfully with compaction!");
+        
+        create_renamed_inst(renamed_insts_i[0], 32'h1038, 5'd17, 1'b1, OPC_ARI_RTYPE, 7'b0000000, 5'd24);
+        create_renamed_inst(renamed_insts_i[1], 32'h103C, 5'd18, 1'b1, OPC_LOAD, 7'b0000000, 5'd25);
+        
+        rs_rdys_i[RS_ALU] = 2'b11;
+        rs_rdys_i[RS_LD]  = 2'b01;  // Only ch0 available - compaction saves the day!
+        rs_rdys_i[RS_ST]  = 2'b11;
+        rs_rdys_i[RS_MDU] = 2'b11;
+        rob_rdy_i = 2'b11;
+        
+        #1;
+        
+        check_assertion("Dispatch succeeds with compaction",
+                       dispatch_rdy_o == 1'b1,
+                       $sformatf("Expected dispatch_rdy=1 (compaction allows dispatch), got %b", dispatch_rdy_o));
+        
+        check_assertion("LOAD uses available ch0",
+                       rs_wes_o[RS_LD] == 2'b01,
+                       $sformatf("Expected rs_wes[LD]=01, got %b", rs_wes_o[RS_LD]));
+        
+        $display("");
+        
+        //-------------------------------------------------------------
+        // TEST 11: Same RS Stall (No Compaction Possible)
+        //-------------------------------------------------------------
+        $display("[TEST 11] Same RS Stall (No Compaction Possible)");
+        $display("  Two ALU instructions, but only ch0 available → Should STALL");
+        
+        create_renamed_inst(renamed_insts_i[0], 32'h1040, 5'd19, 1'b1, OPC_ARI_RTYPE, 7'b0000000, 5'd26);
+        create_renamed_inst(renamed_insts_i[1], 32'h1044, 5'd20, 1'b1, OPC_ARI_RTYPE, 7'b0000000, 5'd27);
+        
+        rs_rdys_i[RS_ALU] = 2'b01;  // Only ch0 available, but need ch1 for same RS
         rs_rdys_i[RS_LD]  = 2'b11;
         rs_rdys_i[RS_ST]  = 2'b11;
         rs_rdys_i[RS_MDU] = 2'b11;
@@ -297,7 +433,7 @@ module dispatch_tb;
         
         #1;
         
-        check_assertion("Dispatch NOT ready (stalled)",
+        check_assertion("Dispatch STALLS (same RS, need both channels)",
                        dispatch_rdy_o == 1'b0,
                        $sformatf("Expected dispatch_rdy=0 (stall), got %b", dispatch_rdy_o));
         
@@ -308,12 +444,12 @@ module dispatch_tb;
         $display("");
         
         //-------------------------------------------------------------
-        // TEST 8: ROB Full (only 1 slot available)
+        // TEST 12: ROB Partial Availability
         //-------------------------------------------------------------
-        $display("[TEST 8] ROB Partial Availability - Should Stall");
+        $display("[TEST 12] ROB Partial Availability - Should Stall");
         
-        create_renamed_inst(renamed_insts_i[0], 32'h1028, 5'd13, 1'b1, OPC_ARI_RTYPE, 7'b0000000, 5'd20);
-        create_renamed_inst(renamed_insts_i[1], 32'h102C, 5'd14, 1'b1, OPC_ARI_RTYPE, 7'b0000000, 5'd21);
+        create_renamed_inst(renamed_insts_i[0], 32'h1048, 5'd21, 1'b1, OPC_ARI_RTYPE, 7'b0000000, 5'd28);
+        create_renamed_inst(renamed_insts_i[1], 32'h104C, 5'd22, 1'b1, OPC_ARI_RTYPE, 7'b0000000, 5'd29);
         
         for (int i = 0; i < NUM_RS; i++) rs_rdys_i[i] = 2'b11;
         rob_rdy_i = 2'b01;  // Only 1 ROB slot available
@@ -327,9 +463,9 @@ module dispatch_tb;
         $display("");
         
         //-------------------------------------------------------------
-        // TEST 9: Invalid Instructions Pass Through
+        // TEST 13: Invalid Instructions Pass Through
         //-------------------------------------------------------------
-        $display("[TEST 9] Invalid Instructions (Bubbles)");
+        $display("[TEST 13] Invalid Instructions (Bubbles)");
         
         renamed_insts_i[0] = '{default:'0};
         renamed_insts_i[1] = '{default:'0};
@@ -347,30 +483,6 @@ module dispatch_tb;
                        (rs_wes_o[RS_ALU] == 2'b00) && (rob_we_o == 2'b00) && 
                        (rs_wes_o[RS_LD] == 2'b00) && (rs_wes_o[RS_ST] == 2'b00) && (rs_wes_o[RS_MDU] == 2'b00),
                        "Expected no writes");
-        
-        $display("");
-        
-        //-------------------------------------------------------------
-        // TEST 10: Same Queue Collision (2 ALUs to same RS)
-        //-------------------------------------------------------------
-        $display("[TEST 10] Same Queue Collision Handling");
-        $display("  Two ALU instructions targeting same RS");
-        
-        create_renamed_inst(renamed_insts_i[0], 32'h1030, 5'd15, 1'b1, OPC_ARI_RTYPE, 7'b0000000, 5'd22);
-        create_renamed_inst(renamed_insts_i[1], 32'h1034, 5'd16, 1'b1, OPC_ARI_ITYPE, 7'b0000000, 5'd23);
-        
-        for (int i = 0; i < NUM_RS; i++) rs_rdys_i[i] = 2'b11;
-        rob_rdy_i = 2'b11;
-        
-        #1;
-        
-        check_assertion("Both dispatch successfully",
-                       dispatch_rdy_o == 1'b1,
-                       $sformatf("Expected dispatch_rdy=1, got %b", dispatch_rdy_o));
-        
-        check_assertion("ALU writes to both slots",
-                       rs_wes_o[RS_ALU] == 2'b11,
-                       $sformatf("Expected rs_wes[ALU]=11, got %b", rs_wes_o[RS_ALU]));
         
         $display("");
         

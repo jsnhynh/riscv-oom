@@ -1,5 +1,5 @@
 /*
- * Dispatch Stage
+ * Dispatch Stage (with Compaction)
  *
  * This module is a purely combinational "switchyard" that routes renamed
  * instructions from the Rename stage to the correct backend issue queue
@@ -10,6 +10,16 @@
  * 2. ROB Write: Writes the initial metadata (pc, rd, etc.) for each
  *               instruction into the Reorder Buffer.
  * It provides the final backpressure signal to the Rename stage.
+ *
+ * COMPACTION LOGIC:
+ * - If inst[0] and inst[1] target the SAME RS:
+ *   inst[0] → channel 0, inst[1] → channel 1
+ * - If inst[0] and inst[1] target DIFFERENT RSs:
+ *   inst[0] → channel 0 of its RS
+ *   inst[1] → channel 0 of its RS (compacted!)
+ *
+ * This reduces pressure on reservation stations by utilizing available
+ * channel 0 slots instead of always using channel 1 for inst[1].
  */
 
 import riscv_isa_pkg::*;
@@ -58,9 +68,17 @@ module dispatch (
                                 (is_st[0]  && rs_rdys[2][0]) ||
                                 (is_mdu[0] && rs_rdys[3][0])));
 
-    // -- Step 3: Determine if inst 1 can be dispatched --
+    // -- Step 3: Determine if inst 1 can be dispatched (WITH COMPACTION) --
     logic rob_avail_for_inst1;
     logic rs_avail_for_inst1;
+    
+    // Compaction: Do both instructions target the same RS?
+    logic same_rs;
+    assign same_rs = renamed_insts[0].is_valid && renamed_insts[1].is_valid && can_dispatch[0] &&
+                     ((is_alu[0] && is_alu[1]) || 
+                      (is_ld[0] && is_ld[1]) || 
+                      (is_st[0] && is_st[1]) || 
+                      (is_mdu[0] && is_mdu[1]));
 
     assign rob_avail_for_inst1 = (renamed_insts[0].is_valid && can_dispatch[0]) ? rob_rdy[1] : rob_rdy[0];
 
@@ -69,38 +87,69 @@ module dispatch (
         if (!renamed_insts[1].is_valid) begin 
             rs_avail_for_inst1 = 1'b1;  // No instruction, always available
         end else if (is_alu[1]) begin
-            rs_avail_for_inst1 = (is_alu[0] && renamed_insts[0].is_valid && can_dispatch[0]) ? rs_rdys[0][1] : rs_rdys[0][0];
+            // If same RS: need channel 1. If different RS: use channel 0 (compaction!)
+            rs_avail_for_inst1 = same_rs ? rs_rdys[0][1] : rs_rdys[0][0];
         end else if (is_ld[1]) begin
-            rs_avail_for_inst1 = (is_ld[0] && renamed_insts[0].is_valid && can_dispatch[0]) ? rs_rdys[1][1] : rs_rdys[1][0];
+            rs_avail_for_inst1 = same_rs ? rs_rdys[1][1] : rs_rdys[1][0];
         end else if (is_st[1]) begin
-            rs_avail_for_inst1 = (is_st[0] && renamed_insts[0].is_valid && can_dispatch[0]) ? rs_rdys[2][1] : rs_rdys[2][0];
+            rs_avail_for_inst1 = same_rs ? rs_rdys[2][1] : rs_rdys[2][0];
         end else if (is_mdu[1]) begin
-            rs_avail_for_inst1 = (is_mdu[0] && renamed_insts[0].is_valid && can_dispatch[0]) ? rs_rdys[3][1] : rs_rdys[3][0];
+            rs_avail_for_inst1 = same_rs ? rs_rdys[3][1] : rs_rdys[3][0];
         end
     end
     assign can_dispatch[1] = !renamed_insts[1].is_valid || (rob_avail_for_inst1 && rs_avail_for_inst1);
 
-    // -- Step 4: Generate Handshake and Write Enable Signals --
+    // -- Step 4: Generate Handshake and Write Enable Signals (WITH COMPACTION) --
     // Ready to accept from rename if I can dispatch exactly both
     assign dispatch_rdy = can_dispatch[0] && can_dispatch[1];
 
-    assign rs_wes[0]    = {dispatch_rdy && renamed_insts[1].is_valid && is_alu[1], dispatch_rdy && renamed_insts[0].is_valid && is_alu[0]};
-    assign rs_wes[1]    = {dispatch_rdy && renamed_insts[1].is_valid && is_ld[1], dispatch_rdy && renamed_insts[0].is_valid && is_ld[0]};
-    assign rs_wes[2]    = {dispatch_rdy && renamed_insts[1].is_valid && is_st[1], dispatch_rdy && renamed_insts[0].is_valid && is_st[0]};
-    assign rs_wes[3]    = {dispatch_rdy && renamed_insts[1].is_valid && is_mdu[1], dispatch_rdy && renamed_insts[0].is_valid && is_mdu[0]};
-    assign rob_we       = {dispatch_rdy && renamed_insts[1].is_valid, dispatch_rdy && renamed_insts[0].is_valid};
+    // Write enables with compaction:
+    // Channel 0: inst[0] if it targets this RS, OR inst[1] if different RS (compacted)
+    // Channel 1: inst[1] only if same RS
+    assign rs_wes[0] = {
+        dispatch_rdy && renamed_insts[1].is_valid && is_alu[1] && same_rs,   // ch1: inst[1] (same RS)
+        dispatch_rdy && ((renamed_insts[0].is_valid && is_alu[0]) ||         // ch0: inst[0]
+                         (renamed_insts[1].is_valid && is_alu[1] && !same_rs)) // ch0: inst[1] (compacted)
+    };
+    
+    assign rs_wes[1] = {
+        dispatch_rdy && renamed_insts[1].is_valid && is_ld[1] && same_rs,
+        dispatch_rdy && ((renamed_insts[0].is_valid && is_ld[0]) ||
+                         (renamed_insts[1].is_valid && is_ld[1] && !same_rs))
+    };
+    
+    assign rs_wes[2] = {
+        dispatch_rdy && renamed_insts[1].is_valid && is_st[1] && same_rs,
+        dispatch_rdy && ((renamed_insts[0].is_valid && is_st[0]) ||
+                         (renamed_insts[1].is_valid && is_st[1] && !same_rs))
+    };
+    
+    assign rs_wes[3] = {
+        dispatch_rdy && renamed_insts[1].is_valid && is_mdu[1] && same_rs,
+        dispatch_rdy && ((renamed_insts[0].is_valid && is_mdu[0]) ||
+                         (renamed_insts[1].is_valid && is_mdu[1] && !same_rs))
+    };
+    
+    assign rob_we = {dispatch_rdy && renamed_insts[1].is_valid, dispatch_rdy && renamed_insts[0].is_valid};
 
-    // -- Step 5: Assign Data to Output Ports --
-    assign rs_issue_ports[0][0] = renamed_insts[0];
+    // -- Step 5: Assign Data to Output Ports (WITH COMPACTION ROUTING) --
+    // Smart routing: port[0] gets inst[0] if inst[0] targets this RS, else inst[1]
+    // This enables compaction when inst[1] goes to different RS
+    
+    // ALU RS
+    assign rs_issue_ports[0][0] = is_alu[0] ? renamed_insts[0] : renamed_insts[1];
     assign rs_issue_ports[0][1] = renamed_insts[1];
 
-    assign rs_issue_ports[1][0] = renamed_insts[0];
+    // LSQ Load RS
+    assign rs_issue_ports[1][0] = is_ld[0] ? renamed_insts[0] : renamed_insts[1];
     assign rs_issue_ports[1][1] = renamed_insts[1];
     
-    assign rs_issue_ports[2][0] = renamed_insts[0];
+    // LSQ Store RS
+    assign rs_issue_ports[2][0] = is_st[0] ? renamed_insts[0] : renamed_insts[1];
     assign rs_issue_ports[2][1] = renamed_insts[1];
 
-    assign rs_issue_ports[3][0] = renamed_insts[0];
+    // MDU RS
+    assign rs_issue_ports[3][0] = is_mdu[0] ? renamed_insts[0] : renamed_insts[1];
     assign rs_issue_ports[3][1] = renamed_insts[1];
 
     // ROB Entry Generation Function
