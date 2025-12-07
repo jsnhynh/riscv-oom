@@ -30,11 +30,12 @@ module decode (
     //-------------------------------------------------------------
     function automatic logic [CPU_DATA_BITS-1:0] gen_imm(input logic [CPU_INST_BITS-1:0] inst);
         casez (inst[6:0])
-            OPC_ARI_ITYPE:      return {{20{inst[31]}}, inst[31:20]};                               // I-type
+            OPC_ARI_ITYPE, OPC_LOAD, OPC_JALR:  
+                                return {{20{inst[31]}}, inst[31:20]};                               // I-type (+I*, +LOAD, +JALR)
             OPC_STORE:          return {{20{inst[31]}}, inst[31:25], inst[11:7]};                   // S-type
             OPC_BRANCH:         return {{20{inst[31]}}, inst[7], inst[30:25], inst[11:8], 1'b0};    // B-type
             OPC_LUI, OPC_AUIPC: return {inst[31:12], 12'b0};                                        // U-type (LUI/AUIPC)
-            OPC_JAL, OPC_JALR:  return {{12{inst[31]}}, inst[19:12], inst[20], inst[30:21], 1'b0};  // J-type (JAL/JALR)
+            OPC_JAL:            return {{12{inst[31]}}, inst[19:12], inst[20], inst[30:21], 1'b0};  // J-type (JAL)
             default:            return '0;
         endcase
     endfunction

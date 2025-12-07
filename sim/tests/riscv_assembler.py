@@ -9,9 +9,38 @@
 # - Only labels work for branch statements, not immediate values
 # - You must manually load the starting location of your stack pointer in the asm program
 # using the li instruction
+# 
+# Usage: python3 riscv_assembler.py input_file.s [output_file.hex]
 #---------------------------------------------------------------------
-file = open("rv32im_test_script_mod.s", "r")
-mem_file = open("mem.txt", "w") 
+import sys
+import os
+
+# Parse command-line arguments
+if len(sys.argv) < 2:
+    print("Usage: python3 riscv_assembler.py input_file.s [output_file.hex]")
+    print("  If output file is not specified, will use input filename with .hex extension")
+    sys.exit(1)
+
+input_filename = sys.argv[1]
+
+# Generate output filename
+if len(sys.argv) >= 3:
+    output_filename = sys.argv[2]
+else:
+    # Replace extension with .hex
+    base_name = os.path.splitext(input_filename)[0]
+    output_filename = base_name + ".hex"
+
+# Check if input file exists
+if not os.path.exists(input_filename):
+    print(f"Error: Input file '{input_filename}' not found!")
+    sys.exit(1)
+
+print(f"Assembling: {input_filename}")
+print(f"Output to:  {output_filename}")
+
+file = open(input_filename, "r")
+mem_file = open(output_filename, "w") 
 lines = file.readlines()
 
 instr_arr = []
@@ -144,7 +173,7 @@ while j < len(PC_arr) - 1:
     j += 1
 
 def write_to_file(line, PC_cnt):
-    print("LINE 2 PRINT: ", line)
+    #print("LINE 2 PRINT: ", line)
     mem_file.write((str(hex(int(line, 2)))[2:]).zfill(8) + "\n")
     PC_cnt += 4
     return PC_cnt
@@ -253,15 +282,24 @@ for i in range(0,len(instr_arr)):
 
     elif (instruction[0] == 'jal'):
         if ('0x' in instruction[2]):
-            imm = str(bin(int(instruction[2][2:], 16)))[2:].zfill(20)
+            offset = int(instruction[2], 16)
         else:
-            imm = str(bin(int(label_dict[instruction[2]])))[2:].zfill(20)
-        if (int(imm,2) > 2**20 - 1):
-            raise ValueError("Line %d: Immediate value must be less than 2^20." % i)
+            target_addr = int(label_dict[instruction[2]])
+            offset = target_addr - PC_cnt
+        
+        # Handle negative offsets (backward jumps)
+        if offset < 0:
+            # Mask to 20 bits for two's complement
+            imm = str(bin(offset & 0xFFFFF))[2:].zfill(20)
+        else:
+            imm = str(bin(offset))[2:].zfill(20)
+        
+        if (len(imm) > 20):
+            raise ValueError("Line %d: JAL offset too large (max ±1MB)." % i)
             exit
         rd = instruction[1].strip(',')
         opcode = '1101111'
-        mem_line = imm[-20] + imm[-10::1] + imm[-11] + imm[-19:-11:-1] + registers[rd] + opcode
+        mem_line = imm[0] + imm[9:19] + imm[8] + imm[0:8] + registers[rd] + opcode
         PC_cnt = write_to_file(mem_line, PC_cnt)
 
     elif (instruction[0] == 'jalr'):
@@ -421,7 +459,7 @@ for i in range(0,len(instr_arr)):
         PC_cnt = write_to_file(mem_line, PC_cnt)
 
     elif(instruction[0] == 'addi'):
-        print("INSTRUCTION", instruction[0], instruction[1], instruction[2], instruction[3])
+        #print("INSTRUCTION", instruction[0], instruction[1], instruction[2], instruction[3])
         rd = instruction[1].strip(',')
         rs1 = instruction[2].strip(',')
         if ('-' in instruction[3]):
@@ -805,15 +843,21 @@ for i in range(0,len(instr_arr)):
         PC_cnt = write_to_file(mem_line, PC_cnt)
             
     elif (instruction[0] == 'j'):
-        imm = str(bin(int(label_dict[instruction[1]])))[2:].zfill(12)
-        if (int(imm,2) > 2**12 - 1):
-            raise ValueError("Line %d: Immediate value must be less than or equal to 4095." % i)     
+        # FIXED: Use JAL with PC-relative offset (not JALR with absolute address)
+        target_addr = int(label_dict[instruction[1]])
+        offset = target_addr - PC_cnt
+        
+        if offset < 0:
+            imm = str(bin(offset & 0xFFFFF))[2:].zfill(20)
+        else:
+            imm = str(bin(offset))[2:].zfill(20)
+        
+        if (len(imm) > 20):
+            raise ValueError("Line %d: Jump offset too large (max ±1MB)." % i)
             exit
         rd = 'x0'
-        opcode = '1100111'
-        funct3 = '000'
-        rs1 = 'x0'
-        mem_line = imm.zfill(12) + registers[rs1] + funct3 + registers[rd] + opcode
+        opcode = '1101111'  # JAL opcode
+        mem_line = imm[-20] + imm[-10::1] + imm[-11] + imm[-19:-11:-1] + registers[rd] + opcode
         PC_cnt = write_to_file(mem_line, PC_cnt)
 
     elif(instruction[0] == 'la'):
@@ -831,15 +875,21 @@ for i in range(0,len(instr_arr)):
         PC_cnt = write_to_file(mem_line, PC_cnt)
 
     elif (instruction[0] == 'call'):
-        imm = str(bin(int(label_dict[instruction[1]])))[2:].zfill(12)
-        if (int(imm,2) > 2**12 - 1):
-            raise ValueError("Line %d: Immediate value must be less than or equal to 4095." % i)     
+        # FIXED: Use JAL with PC-relative offset (not JALR with absolute address)
+        target_addr = int(label_dict[instruction[1]])
+        offset = target_addr - PC_cnt
+        
+        if offset < 0:
+            imm = str(bin(offset & 0xFFFFF))[2:].zfill(20)
+        else:
+            imm = str(bin(offset))[2:].zfill(20)
+        
+        if (len(imm) > 20):
+            raise ValueError("Line %d: Call offset too large (max ±1MB)." % i)
             exit
-        rd = 'ra'
-        opcode = '1100111'
-        funct3 = '000'
-        rs1 = 'x0'
-        mem_line = imm.zfill(12) + registers[rs1] + funct3 + registers[rd] + opcode
+        rd = 'ra'  # Link register
+        opcode = '1101111'  # JAL opcode
+        mem_line = imm[-20] + imm[-10::1] + imm[-11] + imm[-19:-11:-1] + registers[rd] + opcode
         PC_cnt = write_to_file(mem_line, PC_cnt)
 
     elif (instruction[0] == 'ret'):
@@ -954,3 +1004,5 @@ for i in range(0,len(instr_arr)):
 
 file.close()
 mem_file.close()
+
+print(f"\nAssembly complete! Generated {output_filename}")
