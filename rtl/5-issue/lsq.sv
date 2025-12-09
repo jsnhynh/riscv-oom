@@ -62,13 +62,9 @@ instruction_t mux_ld_entry_arr [RS_SIZE - 1 : 0];
 
 //AGU 
 instruction_t agu_execute_pkt_arr [RS_SIZE + STQ_DEPTH - 1 : 0];
-logic agu_read_rdy_arr [RS_SIZE + STQ_DEPTH - 1 : 0];
+logic [RS_SIZE + STQ_DEPTH - 1 : 0] agu_read_rdy_arr ;
 
 
-//FORWARDING
-logic [RS_SIZE - 1: 0] ld_forward_rdy_arr;
-logic [RS_SIZE - 1: 0] ld_forward_re_arr;
-instruction_t ld_forward_pkt_arr [RS_SIZE - 1 : 0];
 
 
 
@@ -98,9 +94,6 @@ generate
         .agu_port(agu_result),
         //Forward 
         .store_q(store_q),
-        .forward_re(ld_forward_re_arr[i]),
-        .forward_pkt(ld_forward_pkt_arr[i]),
-        .forward_rdy(ld_forward_rdy_arr[i]),
         .rob_head(rob_head)
         );
     end
@@ -199,8 +192,13 @@ logic [STQ_DEPTH - 1 : 0] st_write_rdy_arr ;
 logic [STQ_DEPTH - 1 : 0] [PIPE_WIDTH - 1 : 0]  st_sel_arr;
 logic [STQ_DEPTH - 1 : 0] st_read_rdy ;
 logic [STQ_DEPTH - 1 : 0] st_re_arr ;
+
 instruction_t mux_st_entry_arr [STQ_DEPTH - 1 : 0];
 
+instruction_t dummy_stq [STQ_DEPTH];
+always_comb begin
+  foreach (dummy_stq[i]) dummy_stq[i] = '0;
+end
 
 genvar j;
 generate
@@ -227,10 +225,11 @@ generate
         .agu_execute_pkt(agu_execute_pkt_arr[j + RS_SIZE]),
         .agu_port(agu_result),
         //Forward 
-        .store_q(),
-        .forward_re('0),
-        .forward_pkt(),
-        .forward_rdy()
+        .store_q(dummy_stq),
+        .rob_head(rob_head)
+        //.forward_re('0),
+        //.forward_pkt(),
+        //.forward_rdy()
         );
     end
 endgenerate
@@ -368,36 +367,10 @@ end
 
 //agu logic
 always_comb begin
-  agu_execute_pkt = '0;
-  if(agu_rdy) agu_execute_pkt = agu_execute_pkt_arr[rb_agu_c()];
+  if(agu_rdy && |agu_read_rdy_arr) agu_execute_pkt = agu_execute_pkt_arr[rb_agu_c()];
+  else agu_execute_pkt = '0;
 end
 
-//forward logic 
-function int rb_fwd_c();
-  int o;
-  int flag;
-  flag = 0;
-  o = 0;
-  foreach(ld_forward_pkt_arr[i]) begin
-    if(ld_forward_rdy_arr[i]) begin
-      if(!flag) begin
-        flag = 1;
-        o = i;
-      end
-      else if(ld_forward_pkt_arr[i].dest_tag - rob_head < ld_forward_pkt_arr[o].dest_tag - rob_head) o = i;
-    end
-  end
-endfunction
-
-always_comb begin
-  foreach(ld_forward_re_arr[i]) ld_forward_re_arr[i] = '0;
-  foreach(ld_forward_pkt_arr[i]) ld_forward_pkt_arr[i] = '0;
-  forward_rdy = |ld_forward_rdy_arr;
-  if(forward_re) begin
-    ld_forward_re_arr[rb_fwd_c()] = 1'b1;
-    forward_pkt = ld_forward_pkt_arr[rb_fwd_c()];
-  end
-end
 
 
 //execute pkt logic

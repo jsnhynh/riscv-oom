@@ -30,15 +30,12 @@ import uarch_pkg::*;
     //in the future maybe switch to an address buffer, or with a fast l1 cache maybe j remove forwarding?
     //compiler can deal with it, doesn't feel worth
     input instruction_t store_q [STQ_DEPTH],
-    input logic forward_re,
-    output writeback_packet_t forward_pkt,
-    output logic forward_rdy,
     //rob_head
     input  logic [TAG_WIDTH-1:0]    rob_head
 );
-instruction_t fwd_entry;
+//instruction_t fwd_entry;
 logic forward_match;
-logic base_rs_write_rdy, base_rs_read_rdy, agu_we, man_flush, fwd_we;
+logic base_rs_write_rdy, base_rs_read_rdy, agu_we, man_flush;
 instruction_t muxed_rs_entry, agu_rs_entry;
 rs rs (
     .clk(clk), 
@@ -47,7 +44,7 @@ rs rs (
     .cache_stall(cache_stall),
     // Ports from Displatch
     .rs_entry(muxed_rs_entry),
-    .rs_we(rs_we || agu_we || fwd_we),
+    .rs_we(rs_we || agu_we),
     //Ports to Dispatch
     .rs_write_rdy(base_rs_write_rdy),
     //when rs is ready to be read, it is when all REGISTER values are accounted for
@@ -57,23 +54,16 @@ rs rs (
     .execute_pkt(execute_pkt),
 
     //Ports from Execute
-    .alu_re(alu_re || agu_we || fwd_we),
+    .alu_re(alu_re || agu_we),
 
     //CDB PORT 
     .cdb_ports(cdb_ports)
 );
     assign agu_we = agu_port.is_valid && agu_port.dest_tag == execute_pkt.dest_tag;
-    //muxed_rs_entry = '0;
-    // case ({rs_we, agu_we, fwd_we})
-    //     3'b100: muxed_rs_entry = rs_entry;
-    //     3'b010: muxed_rs_entry = agu_rs_entry;
-    //     3'b001: muxed_rs_entry = fwd_entry; 
-    //     default: muxed_rs_entry = rs_entry;
-    // endcase
+
     always_comb begin
         if(rs_we) muxed_rs_entry = rs_entry;
         else if (agu_we) muxed_rs_entry = agu_rs_entry;
-        else if (fwd_we) muxed_rs_entry = fwd_entry;
         else muxed_rs_entry = '0;
     end
     assign agu_execute_pkt = execute_pkt;
@@ -101,8 +91,6 @@ always_comb begin
     rs_read_rdy = 1'b0;
     agu_read_rdy = 1'b0;
     man_flush = 1'b0; 
-    forward_rdy = 1'b0;
-    fwd_we = 1'b0;
     case (state)
         IDLE : begin
             if(base_rs_write_rdy) rs_write_rdy = 1'b1;
@@ -117,16 +105,19 @@ always_comb begin
             else next_state = WAIT_REG;
         end
         WAIT_AGU : begin
-            agu_read_rdy = 1'b1;
+            
             if(agu_we) begin
+                agu_read_rdy = 1'b0;
                  next_state = VALID_ENTRY;
             end
-            else next_state = WAIT_AGU;
+            else begin
+                agu_read_rdy = 1'b1;
+                next_state = WAIT_AGU;
+            end
         end
         VALID_ENTRY : begin
             if(forward_match) begin
-                fwd_we = 1'b1;
-                next_state = FWD_ENTRY;
+                next_state = VALID_ENTRY;
             end
             else begin
                 rs_read_rdy = 1'b1;
@@ -141,14 +132,7 @@ always_comb begin
                 else next_state = VALID_ENTRY;
             end
         end
-        FWD_ENTRY : begin
-            forward_rdy = 1'b1;
-            if(forward_re) begin
-                if(rs_we) next_state = WAIT_REG;
-                else
-                next_state = IDLE;
-            end
-        end
+
     endcase
 end
 
@@ -166,18 +150,10 @@ endfunction
 
 instruction_t ff;
 always_comb begin 
-    fwd_entry = execute_pkt;
     ff = find_fwd();
-    if(ff != 0) begin
-        forward_match = 1'b1;
-        fwd_entry.src_0_a = ff.src_1_b;
-    end
+    if(ff != 0) forward_match = 1'b1;
     else forward_match = 1'b0;
 
-    forward_pkt.dest_tag = execute_pkt.dest_tag;
-    forward_pkt.exception = 1'b0;
-    forward_pkt.is_valid = forward_rdy;
-    forward_pkt.result = execute_pkt.src_0_a;
 end
 
 
