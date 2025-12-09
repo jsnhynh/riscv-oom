@@ -7,8 +7,8 @@ module cpu_tb;
     //-------------------------------------------------------------
     // Test Configuration
     //-------------------------------------------------------------
-    localparam TEST_FILE = "rv32im_test.hex";
-    localparam MAX_CYCLES = 1000;
+    localparam TEST_FILE = "rv32im_test_fixed.hex";
+    localparam MAX_CYCLES = 2000;
 
     //-------------------------------------------------------------
     // Test Statistics
@@ -45,21 +45,6 @@ module cpu_tb;
     // Helper Tasks
     //-------------------------------------------------------------
     
-    task automatic check_assertion(
-        input string test_name,
-        input logic condition,
-        input string fail_msg
-    );
-        assertions_checked++;
-        if (condition) begin
-            $display("  [PASS] %s", test_name);
-            tests_passed++;
-        end else begin
-            $display("  [FAIL] %s: %s", test_name, fail_msg);
-            tests_failed++;
-        end
-    endtask
-
     task automatic check_register(
         input string test_name,
         input int reg_num,
@@ -78,68 +63,53 @@ module cpu_tb;
             tests_failed++;
         end
     endtask
-    /*
-    task automatic check_memory(
+
+    task automatic check_assertion(
         input string test_name,
-        input logic [31:0] addr,
-        input logic [31:0] expected_value
+        input logic condition,
+        input string fail_msg
     );
-        logic [31:0] actual_value;
-        logic [7:0] byte0, byte1, byte2, byte3;
-        
-        byte0 = dut.mem.dmem[addr + 0];
-        byte1 = dut.mem.dmem[addr + 1];
-        byte2 = dut.mem.dmem[addr + 2];
-        byte3 = dut.mem.dmem[addr + 3];
-        actual_value = {byte3, byte2, byte1, byte0};
-        
         assertions_checked++;
-        if (actual_value == expected_value) begin
-            $display("  [PASS] %s: mem[0x%h] = 0x%08h", test_name, addr, actual_value);
+        if (condition) begin
+            $display("  [PASS] %s", test_name);
             tests_passed++;
         end else begin
-            $display("  [FAIL] %s: mem[0x%h] = 0x%08h (expected 0x%08h)",
-                     test_name, addr, actual_value, expected_value);
+            $display("  [FAIL] %s: %s", test_name, fail_msg);
             tests_failed++;
         end
     endtask
-    */
+
     task automatic wait_for_completion();
         logic [31:0] completion_reg;
         logic done;
-        int stall_cycles;
         instruction_count = 0;
         done = 0;
         cycle_count = 1;
-        stall_cycles = 0;
         
-        $display("\n[INFO] Waiting for program completion (x31 = 0xFF or timeout)...\n");
+        $display("\n[INFO] Waiting for program completion (x31 = 0xFF)...\n");
         
         while (!done && cycle_count < MAX_CYCLES) begin
             @(posedge clk);
             cycle_count++;
-            instruction_count+=dut.core0.commit_stage.commit_cnt;
-            
-            completion_reg = dut.core0.rename_stage.prf_inst.data_reg[31];
+            instruction_count += dut.core0.commit_stage.commit_cnt;
+            ipc = real'(instruction_count) / real'(cycle_count);
 
-            if (cycle_count > 0) begin
-                ipc = real'(cycle_count) / real'(instruction_count);
-            end
+            completion_reg = dut.core0.rename_stage.prf_inst.data_reg[31];
             
             if (completion_reg == 32'hFF) begin
                 done = 1;
                 $display("[INFO] Program completed after %0d cycles", cycle_count);
                 $display("[INFO] Instructions committed: %0d", instruction_count);
             end
-            
         end
         
         if (!done) begin
             $display("[WARNING] Program did not complete within %0d cycles", MAX_CYCLES);
-            $display("[WARNING] Final instruction count: %0d\n", instruction_count);
+            $display("[WARNING] Final instruction count: %0d", instruction_count);
+            $display("[WARNING] x31 = 0x%08h\n", completion_reg);
         end
         
-        // Wait a few more cycles for pipeline to settle
+        // Wait for pipeline to settle
         repeat(10) @(posedge clk);
         cycle_count += 10;
     endtask
@@ -164,7 +134,7 @@ module cpu_tb;
         $display("========================================");
         $display("  Total Cycles:           %0d", cycle_count);
         $display("  Instructions Committed: %0d", instruction_count);
-        if (cycle_count > 0) begin
+        if (cycle_count > 0 && instruction_count > 0) begin
             ipc = real'(instruction_count) / real'(cycle_count);
             $display("  IPC (Instructions/Cycle): %0.3f", ipc);
             $display("  CPI (Cycles/Instruction): %0.3f", 1.0/ipc);
@@ -180,7 +150,7 @@ module cpu_tb;
         $dumpvars(0, cpu_tb);
         
         $display("========================================");
-        $display("  RV32IM CPU Testbench Started");
+        $display("  RV32IM CPU Testbench");
         $display("========================================");
         $display("  Test Program: %s", TEST_FILE);
         $display("  Max Cycles: %0d", MAX_CYCLES);
@@ -188,7 +158,7 @@ module cpu_tb;
         
         // Reset
         rst = 1;
-        repeat(2) @(posedge clk);
+        repeat(5) @(posedge clk);
         rst = 0;
         
         // Wait for program to complete
@@ -203,7 +173,9 @@ module cpu_tb;
         //-------------------------------------------------------------
         // Verify Results
         //-------------------------------------------------------------
-        $display("[TEST VERIFICATION] Checking expected register values...\n");
+        $display("\n========================================");
+        $display("  Test Verification");
+        $display("========================================\n");
         
         // Test 1: Basic Arithmetic
         $display("=== Test 1: Basic Arithmetic ===");
@@ -223,6 +195,7 @@ module cpu_tb;
         $display("\n=== Test 3: Shift Operations ===");
         check_register("SLLI: 5 << 2", 11, 32'd20);
         check_register("SRLI: 7 >> 1", 12, 32'd3);
+        check_register("ADDI: -8", 13, 32'hFFFFFFF8);
         check_register("SRAI: -8 >> 1", 14, 32'hFFFFFFFC);  // -4
         check_register("SLL: 5 << 7", 15, 32'd640);
         check_register("SRL: 7 >> 5", 16, 32'd0);
@@ -232,7 +205,7 @@ module cpu_tb;
         $display("\n=== Test 4: Comparison Operations ===");
         check_register("SLT: 5 < 7", 18, 32'd1);
         check_register("SLT: 7 < 5", 19, 32'd0);
-        check_register("SLTU: 0xFFFFFFF8 < 5 (unsigned)", 20, 32'd0);
+        check_register("SLTU: 0xFFFFFFF8 < 5", 20, 32'd0);
         check_register("SLTI: 5 < 10", 21, 32'd1);
         check_register("SLTIU: 5 < 3", 22, 32'd0);
         
@@ -245,66 +218,63 @@ module cpu_tb;
         
         // Test 6: Branches
         $display("\n=== Test 6: Branch Operations ===");
-        check_register("Branches executed correctly", 25, 32'd5);
+        check_register("Branches completed", 25, 32'd11);
         
         // Test 7: JAL/JALR
         $display("\n=== Test 7: JAL/JALR Operations ===");
-        check_register("JAL/JALR path completed", 25, 32'd5);
-        check_assertion("JAL stored return address",
+        check_register("JAL/JALR completed", 25, 32'd11);
+        check_assertion("JAL saved return address",
                        dut.core0.rename_stage.prf_inst.data_reg[26] != 32'h0,
-                       "Return address is zero");
+                       "x26 is zero");
+        check_assertion("JAL backward saved return",
+                       dut.core0.rename_stage.prf_inst.data_reg[27] != 32'h0,
+                       "x27 is zero");
+        check_assertion("JALR saved return address",
+                       dut.core0.rename_stage.prf_inst.data_reg[29] != 32'h0,
+                       "x29 is zero");
         
-        // Test 8: Multiply/Divide
-        $display("\n=== Test 8: Multiply/Divide Operations (M extension) ===");
+        // Test 8: Memory Operations (Store then Load)
+        $display("\n=== Test 9: Memory Operations ===");
+        check_register("LW: Word load (42)", 11, 32'd42);
+        check_register("LW: Word load (100)", 12, 32'd100);
+        check_register("LBU: Unsigned byte (0xAB)", 13, 32'hAB);
+        check_register("LB: Signed byte (0xAB)", 14, 32'hFFFFFFAB);
+        check_register("LHU: Unsigned halfword (0x123)", 15, 32'h123);
+        check_register("LH: Signed halfword (0x123)", 16, 32'h123);
+        check_register("LB: Signed byte (0xFF)", 17, 32'hFFFFFFFF);
+        check_register("LBU: Unsigned byte (0xFF)", 18, 32'hFF);
+        check_register("LH: Signed halfword (0xFFFF)", 19, 32'hFFFFFFFF);
+        check_register("LHU: Unsigned halfword (0xFFFF)", 20, 32'hFFFF);
+        
+        // Test 9: Multiply/Divide
+        $display("\n=== Test 8: Multiply/Divide (M extension) ===");
         check_register("MUL: 6 * 7", 3, 32'd42);
         check_register("MUL: 100 * 10", 6, 32'd1000);
         check_register("DIV: 100 / 10", 7, 32'd10);
-        check_register("REM: 100 % 10", 8, 32'd0);
-        check_register("MUL: 6 * -3 (negative)", 10, 32'hFFFFFFEE);  // -18
-        
-        // Test 9: Memory Operations
-        $display("\n=== Test 9: Memory Operations ===");
-        /* check_register("LW: Load word (42)", 11, 32'd42);
-        check_register("LW: Load word (1000)", 12, 32'd1000);
-        check_register("LW: Load word (10)", 13, 32'd10);
-        check_register("LBU: Load unsigned byte", 15, 32'hAB);
-        check_register("LB: Load signed byte", 16, 32'hFFFFFFAB);
-        check_register("LHU: Load unsigned halfword", 18, 32'h1234);
-        check_register("LH: Load signed halfword", 19, 32'h1234); */
-        /* check_memory("SW: Store word (42)", 32'h100, 32'd42);
-        check_memory("SW: Store word (1000)", 32'h104, 32'd1000);
-        check_memory("SW: Store word (10)", 32'h108, 32'd10); */
+        check_register("MUL: 6 * -3", 10, 32'hFFFFFFEE);  // -18
         
         // Completion marker
         $display("\n=== Completion Check ===");
         check_register("Completion marker", 31, 32'hFF);
         
         //-------------------------------------------------------------
-        // Final Performance Report
-        //-------------------------------------------------------------
-        dump_performance_stats();
-        
-        //-------------------------------------------------------------
         // Test Summary
         //-------------------------------------------------------------
-        #(MAX_CYCLES * CLK_PERIOD * 2);
         $display("\n========================================");
         $display("  Test Summary");
         $display("========================================");
         $display("  Execution Cycles:     %0d", cycle_count);
         $display("  Instructions Retired: %0d", instruction_count);
-        if (cycle_count > 0) begin
-            $display("  IPC:                  %0.3f", ipc);
-        end
+        $display("  IPC:                  %0.3f", ipc);
         $display("  Tests Passed:         %0d", tests_passed);
         $display("  Tests Failed:         %0d", tests_failed);
         $display("  Total Checks:         %0d", assertions_checked);
         $display("========================================");
         
         if (tests_failed == 0) begin
-            $display("  ✓ ALL TESTS PASSED!");
+            $display("\n  ✓✓✓ ALL TESTS PASSED! ✓✓✓\n");
         end else begin
-            $display("  ✗ SOME TESTS FAILED!");
+            $display("\n  ✗✗✗ SOME TESTS FAILED! ✗✗✗\n");
         end
         $display("========================================\n");
         

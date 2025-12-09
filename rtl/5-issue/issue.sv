@@ -41,21 +41,6 @@ module issue (
     //-------------------------------------------------------------
     // ALU RS                                                   (0)
     //-------------------------------------------------------------
-    /* alu_rs alu_rs_inst (
-        .clk(clk),
-        .rst(rst),
-        .flush(flush),
-        .cache_stall('0),   // ALU SHOULD NOT BE BACKPRESSURED FROM DCACHE
-        // Ports from Dispatch
-        .rs_rdy(rs_rdys[0]),
-        .rs_we(rs_wes[0]),
-        .rs_entry(rs_issue_ports[0]),
-        // Ports to Execute
-        .alu_rdy(fu_rdys[1:0]),
-        .execute_pkt(fu_packets[1:0]),
-        // CDB
-        .cdb_ports(cdb_ports)
-    ); */
     reservation_station #(.NUM_ENTRIES(ALU_RS_ENTRIES), .ISSUE_WIDTH(2)) alu_rs_isnt (
         .clk(clk),
         .rst(rst),
@@ -111,7 +96,26 @@ module issue (
     //-------------------------------------------------------------
     // MDU RS                                                   (3)
     //-------------------------------------------------------------
-    assign fu_packets[4]    = '{default:'0};
-    assign fu_rdys[4]       = '0;
+    // Local array for the MDU RS (ISSUE_WIDTH = 1)
+    instruction_t mdu_packet [0:0];
+    assign fu_packets[4] = mdu_packet[0];
+    reservation_station #(.NUM_ENTRIES(MDU_RS_ENTRIES), .ISSUE_WIDTH(1)) mdu_rs_isnt (
+        .clk(clk),
+        .rst(rst),
+        .flush(flush),
+        // Dispatch Interface
+        .rs_rdy(rs_rdys[3]),
+        .rs_we(rs_wes[3]),
+        .rs_entries_in(rs_issue_ports[3]),
+        // Issue Interface
+        .fu_rdy(fu_rdys[4]),
+        .fu_packets(mdu_packet),
+        // Wakeup Interface
+        .cdb_ports(cdb_ports),
+
+        // Age Tracking
+        .rob_head(rob_head)
+    );
+
 
 endmodule

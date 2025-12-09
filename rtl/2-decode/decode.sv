@@ -69,7 +69,7 @@ module decode (
         endcase
 
         casez (d_inst.opcode)
-            OPC_ARI_ITYPE, OPC_JAL, OPC_JALR: 
+            OPC_ARI_ITYPE, OPC_JAL, OPC_JALR, OPC_AUIPC, OPC_LUI: 
                         d_inst.src_1_b.tag = '0;
             default:    d_inst.src_1_b.tag = rs2;
         endcase

@@ -1,14 +1,16 @@
 /*
- * Rename Stage
+ * Rename Stage (Combinational Output)
  *
- * This module is the heart of the out-of-order frontend. It performs:
+ * This module performs register renaming for N instructions:
  * 1. PRF Read: Reads the status of source operands (rs1, rs2) for N instructions.
  * 2. ROB Allocation: Requests and is granted new tags from the ROB.
  * 3. PRF (RAT) Write: Writes the new speculative mappings (rd -> rob_tag) to the PRF.
  * 4. Dependency Forwarding: Resolves intra-group dependencies (e.g., inst1 depends on inst0).
  * 5. Commit Bypass: Detects same-cycle commit-rename hazards and bypasses committed data.
- * 6. Compaction: Ensures a single valid instruction is always in slot 0.
- * It outputs N instruction_t packets to the Dispatch stage.
+ * 6. Compaction: Ensures a single valid instruction is always in slot 0 for dispatch.
+ *
+ * Output is combinational - pipeline register lives in RS entries (via Dispatch).
+ * ROB entry writes happen in Dispatch using reserved tags.
  */
 import riscv_isa_pkg::*;
 import uarch_pkg::*;
@@ -24,16 +26,15 @@ module rename (
     input  logic                    dispatch_rdy,
     output instruction_t            renamed_insts       [PIPE_WIDTH-1:0],
 
-    // Ports from ROB
+    // Ports to/from ROB (allocation)
     output logic [PIPE_WIDTH-1:0]   rob_alloc_req,
-    input  logic [PIPE_WIDTH-1:0]   rob_alloc_gnt, // Grant for 0, 1, or 2 entries
+    input  logic [PIPE_WIDTH-1:0]   rob_alloc_gnt,
     input  logic [TAG_WIDTH-1:0]    rob_alloc_tags      [PIPE_WIDTH-1:0],
+
+    // Ports from ROB (commit)
     input  prf_commit_write_port_t  commit_write_ports  [PIPE_WIDTH-1:0]
 );
-    //-------------------------------------------------------------
-    // Internal Pipeline Registers
-    //-------------------------------------------------------------
-    instruction_t renamed_insts_reg [PIPE_WIDTH-1:0];
+
     //-------------------------------------------------------------
     // Internal Wires and Connections
     //-------------------------------------------------------------
@@ -59,30 +60,19 @@ module rename (
     //-------------------------------------------------------------
     // Commit Bypass Logic
     //-------------------------------------------------------------
-    // This function checks if a source operand's producer is committing
-    // in the SAME cycle. If so, it bypasses the committed data directly
-    // to avoid a deadlock where the instruction waits for a tag that will
-    // never broadcast on the CDB (because it already committed).
-    //
-    // TIMING: commit_write_ports arrives registered at the start of the cycle.
-    // PRF async reads see the OLD state (before commit updates).
-    // This bypass happens in the combinational rename logic, detecting when
-    // the commit_write_ports tag matches the source's tag.
     function automatic source_t apply_commit_bypass(
         input source_t src,
         input prf_commit_write_port_t commit_ports [PIPE_WIDTH-1:0]
     );
         source_t result = src;
         
-        // If source is renamed, check if producer is committing THIS cycle
         if (src.is_renamed) begin
             for (int c = 0; c < PIPE_WIDTH; c++) begin
                 if (commit_ports[c].we && commit_ports[c].tag == src.tag) begin
-                    // Producer committing now! Bypass the data
                     result.is_renamed = 1'b0;
                     result.data = commit_ports[c].data;
                     result.tag = '0;
-                    break;  // Found match, stop searching
+                    break;
                 end
             end
         end
@@ -115,10 +105,10 @@ module rename (
         r_inst.uop_0        = d_inst.uop_0;
         r_inst.uop_1        = d_inst.uop_1;
 
-        // New Fields added by rename
+        // New field added by rename
         r_inst.dest_tag     = new_tag;
 
-        // Use sources from PRF read (bypass will be applied later)
+        // Source 0 (ALU operand A): PC or RS1
         if ((d_inst.src_0_a.tag == d_inst.src_1_a.tag) && 
             (d_inst.opcode != OPC_LUI) &&
             (d_inst.opcode != OPC_AUIPC) &&
@@ -128,14 +118,20 @@ module rename (
             r_inst.src_0_a.data         = rs1_port.data;
             r_inst.src_0_a.tag          = rs1_port.tag;
             r_inst.src_0_a.is_renamed   = rs1_port.is_renamed;
-        end else r_inst.src_0_a.data = d_inst.src_0_a.data; // Keep PC/immediate
+        end else begin
+            r_inst.src_0_a.data = d_inst.src_0_a.data;
+        end
 
+        // Source 0 (ALU operand B): IMM or RS2
         if ((d_inst.src_0_b.tag == d_inst.src_1_b.tag) && (d_inst.opcode == OPC_ARI_RTYPE)) begin
             r_inst.src_0_b.data         = rs2_port.data;
             r_inst.src_0_b.tag          = rs2_port.tag;
             r_inst.src_0_b.is_renamed   = rs2_port.is_renamed;
-        end else r_inst.src_0_b.data    = d_inst.src_0_b.data; // Pass IMM
+        end else begin
+            r_inst.src_0_b.data = d_inst.src_0_b.data;
+        end
 
+        // Source 1 (always register values for branches/stores)
         r_inst.src_1_a.data         = rs1_port.data;
         r_inst.src_1_a.tag          = rs1_port.tag;
         r_inst.src_1_a.is_renamed   = rs1_port.is_renamed;
@@ -148,144 +144,117 @@ module rename (
     endfunction
 
     //-------------------------------------------------------------
-    // Conbinational Renaming Logic
+    // Combinational Renaming Logic
     //-------------------------------------------------------------
-    instruction_t renamed_insts_next [PIPE_WIDTH-1:0];
+    instruction_t renamed_tmp     [PIPE_WIDTH-1:0];
+    instruction_t renamed_fwd     [PIPE_WIDTH-1:0];
+    instruction_t renamed_compact [PIPE_WIDTH-1:0];
     logic all_gnts_ok;
 
     // Request ROB entries based on validity of incoming instructions
     assign rob_alloc_req[0] = decoded_insts[0].is_valid;
     assign rob_alloc_req[1] = decoded_insts[1].is_valid;
 
-    assign all_gnts_ok = (!decoded_insts[0].is_valid || rob_alloc_gnt[0]) && (!decoded_insts[1].is_valid || rob_alloc_gnt[1]);
-    
-    instruction_t renamed_insts_tmp [PIPE_WIDTH-1:0];
+    assign all_gnts_ok = (!decoded_insts[0].is_valid || rob_alloc_gnt[0]) && 
+                         (!decoded_insts[1].is_valid || rob_alloc_gnt[1]);
+
     always_comb begin
-        // Step 1: Perform initial renaming for both instructions
-        renamed_insts_tmp[0] = rename_inst(decoded_insts[0], rs1_read_ports[0], rs2_read_ports[0], 
-                                          rob_alloc_tags[0], decoded_insts[0].is_valid && all_gnts_ok);
-        renamed_insts_tmp[1] = rename_inst(decoded_insts[1], rs1_read_ports[1], rs2_read_ports[1], 
-                                          rob_alloc_tags[1], decoded_insts[1].is_valid && all_gnts_ok);
+        // Step 1: Initial renaming
+        renamed_tmp[0] = rename_inst(decoded_insts[0], rs1_read_ports[0], rs2_read_ports[0], 
+                                     rob_alloc_tags[0], decoded_insts[0].is_valid && all_gnts_ok);
+        renamed_tmp[1] = rename_inst(decoded_insts[1], rs1_read_ports[1], rs2_read_ports[1], 
+                                     rob_alloc_tags[1], decoded_insts[1].is_valid && all_gnts_ok);
 
-        // Step 2: Apply intra-group forwards logic for inst 1
-        if (decoded_insts[0].is_valid && rob_alloc_gnt[0] && decoded_insts[0].has_rd && (decoded_insts[1].src_1_a.tag[$clog2(ARCH_REGS)-1:0] == decoded_insts[0].rd) && (decoded_insts[0].rd != 0)) begin //  inst0's rd == inst1's rs1?
-            renamed_insts_tmp[1].src_1_a.is_renamed = 1'b1;
-            renamed_insts_tmp[1].src_1_a.tag       = rob_alloc_tags[0];
+        // Step 2: Intra-group forwarding for inst[1]
+        renamed_fwd[0] = renamed_tmp[0];
+        renamed_fwd[1] = renamed_tmp[1];
+
+        // inst[0].rd -> inst[1].rs1?
+        if (decoded_insts[0].is_valid && rob_alloc_gnt[0] && decoded_insts[0].has_rd && 
+            (decoded_insts[1].src_1_a.tag[$clog2(ARCH_REGS)-1:0] == decoded_insts[0].rd) && 
+            (decoded_insts[0].rd != 0)) 
+        begin
+            renamed_fwd[1].src_1_a.is_renamed = 1'b1;
+            renamed_fwd[1].src_1_a.tag        = rob_alloc_tags[0];
         end
 
-        if (decoded_insts[0].is_valid && rob_alloc_gnt[0] && decoded_insts[0].has_rd && (decoded_insts[1].src_1_b.tag[$clog2(ARCH_REGS)-1:0] == decoded_insts[0].rd) && (decoded_insts[0].rd != 0)) begin //  inst0's rd == inst1's rs2?
-            renamed_insts_tmp[1].src_1_b.is_renamed = 1'b1;
-            renamed_insts_tmp[1].src_1_b.tag        = rob_alloc_tags[0];
+        // inst[0].rd -> inst[1].rs2?
+        if (decoded_insts[0].is_valid && rob_alloc_gnt[0] && decoded_insts[0].has_rd && 
+            (decoded_insts[1].src_1_b.tag[$clog2(ARCH_REGS)-1:0] == decoded_insts[0].rd) && 
+            (decoded_insts[0].rd != 0)) 
+        begin
+            renamed_fwd[1].src_1_b.is_renamed = 1'b1;
+            renamed_fwd[1].src_1_b.tag        = rob_alloc_tags[0];
         end
 
-        // Step 3: Pass Through Sources
-        // inst[0] - src_0_a pass-through (skip for AUIPC, LUI, JAL, BRANCH)
-        for (integer i = 0; i < PIPE_WIDTH; i++) begin
+        // Step 3: Pass-through to src_0 where needed
+        for (int i = 0; i < PIPE_WIDTH; i++) begin
+            // src_0_a mirrors src_1_a for most ALU ops
             if ((decoded_insts[i].src_0_a.tag == decoded_insts[i].src_1_a.tag) &&
                 (decoded_insts[i].opcode != OPC_AUIPC) && 
                 (decoded_insts[i].opcode != OPC_LUI) &&
                 (decoded_insts[i].opcode != OPC_JAL) &&
-                (decoded_insts[i].opcode != OPC_BRANCH)) begin
-                renamed_insts_tmp[i].src_0_a.data       = renamed_insts_tmp[i].src_1_a.data;
-                renamed_insts_tmp[i].src_0_a.tag        = renamed_insts_tmp[i].src_1_a.tag;
-                renamed_insts_tmp[i].src_0_a.is_renamed = renamed_insts_tmp[i].src_1_a.is_renamed;
+                (decoded_insts[i].opcode != OPC_BRANCH)) 
+            begin
+                renamed_fwd[i].src_0_a = renamed_fwd[i].src_1_a;
             end
 
-            // inst[i] - src_0_b pass-through (only for R-type, branches keep immediate!)
+            // src_0_b mirrors src_1_b for R-type only
             if ((decoded_insts[i].src_0_b.tag == decoded_insts[i].src_1_b.tag) &&
-                (decoded_insts[i].opcode == OPC_ARI_RTYPE)) begin
-                renamed_insts_tmp[i].src_0_b.data       = renamed_insts_tmp[i].src_1_b.data;
-                renamed_insts_tmp[i].src_0_b.tag        = renamed_insts_tmp[i].src_1_b.tag;
-                renamed_insts_tmp[i].src_0_b.is_renamed = renamed_insts_tmp[i].src_1_b.is_renamed;
+                (decoded_insts[i].opcode == OPC_ARI_RTYPE)) 
+            begin
+                renamed_fwd[i].src_0_b = renamed_fwd[i].src_1_b;
             end
         end
 
-        // Step 4: Compaction Logic
-        if (!renamed_insts_tmp[0].is_valid && renamed_insts_tmp[1].is_valid) begin
-            renamed_insts_next[0] = renamed_insts_tmp[1];
-            renamed_insts_next[1] = '{default:'0};
+        // Step 4: Compaction for dispatch output (move inst[1] to slot 0 if inst[0] invalid)
+        if (!renamed_fwd[0].is_valid && renamed_fwd[1].is_valid) begin
+            renamed_compact[0] = renamed_fwd[1];
+            renamed_compact[1] = '{default:'0};
         end else begin
-            renamed_insts_next[0] = renamed_insts_tmp[0];
-            renamed_insts_next[1] = renamed_insts_tmp[1];
+            renamed_compact[0] = renamed_fwd[0];
+            renamed_compact[1] = renamed_fwd[1];
         end
-
     end
 
-    // -- Generate Write Ports for PRF --
+    //-------------------------------------------------------------
+    // Commit Bypass (applied to final output)
+    //-------------------------------------------------------------
+    always_comb begin
+        renamed_insts[0] = renamed_compact[0];
+        renamed_insts[1] = renamed_compact[1];
+        
+        if (renamed_compact[0].is_valid) begin
+            renamed_insts[0].src_0_a = apply_commit_bypass(renamed_compact[0].src_0_a, commit_write_ports);
+            renamed_insts[0].src_0_b = apply_commit_bypass(renamed_compact[0].src_0_b, commit_write_ports);
+            renamed_insts[0].src_1_a = apply_commit_bypass(renamed_compact[0].src_1_a, commit_write_ports);
+            renamed_insts[0].src_1_b = apply_commit_bypass(renamed_compact[0].src_1_b, commit_write_ports);
+        end
+        
+        if (renamed_compact[1].is_valid) begin
+            renamed_insts[1].src_0_a = apply_commit_bypass(renamed_compact[1].src_0_a, commit_write_ports);
+            renamed_insts[1].src_0_b = apply_commit_bypass(renamed_compact[1].src_0_b, commit_write_ports);
+            renamed_insts[1].src_1_a = apply_commit_bypass(renamed_compact[1].src_1_a, commit_write_ports);
+            renamed_insts[1].src_1_b = apply_commit_bypass(renamed_compact[1].src_1_b, commit_write_ports);
+        end
+    end
+
+    //-------------------------------------------------------------
+    // RAT Write Ports (update PRF mappings)
+    //-------------------------------------------------------------
     assign rat_write_ports[0].addr = decoded_insts[0].rd;
     assign rat_write_ports[0].tag  = rob_alloc_tags[0];
-    assign rat_write_ports[0].we   = decoded_insts[0].is_valid && rob_alloc_gnt[0] && decoded_insts[0].has_rd;
+    assign rat_write_ports[0].we   = decoded_insts[0].is_valid && rob_alloc_gnt[0] && 
+                                     decoded_insts[0].has_rd && rename_rdy;
 
     assign rat_write_ports[1].addr = decoded_insts[1].rd;
     assign rat_write_ports[1].tag  = rob_alloc_tags[1];
-    assign rat_write_ports[1].we   = decoded_insts[1].is_valid && rob_alloc_gnt[1] && decoded_insts[1].has_rd;
+    assign rat_write_ports[1].we   = decoded_insts[1].is_valid && rob_alloc_gnt[1] && 
+                                     decoded_insts[1].has_rd && rename_rdy;
 
     //-------------------------------------------------------------
-    // Handshake and Pipeline Control
+    // Handshake
     //-------------------------------------------------------------
     assign rename_rdy = dispatch_rdy && all_gnts_ok;
-
-    //-------------------------------------------------------------
-    // Bypass for Next Instructions (before registering)
-    //-------------------------------------------------------------
-    instruction_t renamed_insts_bypassed [PIPE_WIDTH-1:0];
-    
-    always_comb begin
-        renamed_insts_bypassed[0] = renamed_insts_next[0];
-        renamed_insts_bypassed[1] = renamed_insts_next[1];
-        
-        // Apply bypass to newly computed instructions
-        if (renamed_insts_next[0].is_valid) begin
-            renamed_insts_bypassed[0].src_0_a = apply_commit_bypass(renamed_insts_next[0].src_0_a, commit_write_ports);
-            renamed_insts_bypassed[0].src_0_b = apply_commit_bypass(renamed_insts_next[0].src_0_b, commit_write_ports);
-            renamed_insts_bypassed[0].src_1_a = apply_commit_bypass(renamed_insts_next[0].src_1_a, commit_write_ports);
-            renamed_insts_bypassed[0].src_1_b = apply_commit_bypass(renamed_insts_next[0].src_1_b, commit_write_ports);
-        end
-        
-        if (renamed_insts_next[1].is_valid) begin
-            renamed_insts_bypassed[1].src_0_a = apply_commit_bypass(renamed_insts_next[1].src_0_a, commit_write_ports);
-            renamed_insts_bypassed[1].src_0_b = apply_commit_bypass(renamed_insts_next[1].src_0_b, commit_write_ports);
-            renamed_insts_bypassed[1].src_1_a = apply_commit_bypass(renamed_insts_next[1].src_1_a, commit_write_ports);
-            renamed_insts_bypassed[1].src_1_b = apply_commit_bypass(renamed_insts_next[1].src_1_b, commit_write_ports);
-        end
-    end
-
-    //-------------------------------------------------------------
-    // Pipeline Register Logic
-    //-------------------------------------------------------------
-    always_ff @(posedge clk) begin
-        if (rst || flush) begin
-            renamed_insts_reg[0] <= '{default:'0};
-            renamed_insts_reg[1] <= '{default:'0};
-        end else if (rename_rdy) begin
-            renamed_insts_reg[0] <= renamed_insts_bypassed[0];
-            renamed_insts_reg[1] <= renamed_insts_bypassed[1];
-        end
-    end
-
-    //-------------------------------------------------------------
-    // Output Bypass Logic
-    //-------------------------------------------------------------
-    // Apply bypass to registered outputs (for instructions sitting in pipeline)
-    always_comb begin
-        renamed_insts[0] = renamed_insts_reg[0];
-        renamed_insts[1] = renamed_insts_reg[1];
-        
-        // Bypass registered instruction 0
-        if (renamed_insts_reg[0].is_valid) begin
-            renamed_insts[0].src_0_a = apply_commit_bypass(renamed_insts_reg[0].src_0_a, commit_write_ports);
-            renamed_insts[0].src_0_b = apply_commit_bypass(renamed_insts_reg[0].src_0_b, commit_write_ports);
-            renamed_insts[0].src_1_a = apply_commit_bypass(renamed_insts_reg[0].src_1_a, commit_write_ports);
-            renamed_insts[0].src_1_b = apply_commit_bypass(renamed_insts_reg[0].src_1_b, commit_write_ports);
-        end
-        
-        // Bypass registered instruction 1
-        if (renamed_insts_reg[1].is_valid) begin
-            renamed_insts[1].src_0_a = apply_commit_bypass(renamed_insts_reg[1].src_0_a, commit_write_ports);
-            renamed_insts[1].src_0_b = apply_commit_bypass(renamed_insts_reg[1].src_0_b, commit_write_ports);
-            renamed_insts[1].src_1_a = apply_commit_bypass(renamed_insts_reg[1].src_1_a, commit_write_ports);
-            renamed_insts[1].src_1_b = apply_commit_bypass(renamed_insts_reg[1].src_1_b, commit_write_ports);
-        end
-    end
 
 endmodule

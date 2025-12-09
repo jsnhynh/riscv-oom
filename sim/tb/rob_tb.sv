@@ -8,7 +8,7 @@ module rob_tb;
     // Test Configuration
     //=========================================================================
     
-    localparam int TEST_ROB_SIZE = 8;  // Small size for easier testing
+    localparam int TEST_ROB_SIZE = 8;
     localparam int TEST_TAG_WIDTH = $clog2(TEST_ROB_SIZE);
 
     //=========================================================================
@@ -59,12 +59,9 @@ module rob_tb;
     
     // Debug
     logic [TEST_TAG_WIDTH-1:0]          head, tail;
-    
-    // Variables for tests (moved out of initial block)
-    logic [TEST_TAG_WIDTH-1:0]          saved_tag0, saved_tag1;
 
     //=========================================================================
-    // DUT Instantiation with N=8
+    // DUT Instantiation
     //=========================================================================
     
     rob #(.N(TEST_ROB_SIZE)) dut (
@@ -82,9 +79,10 @@ module rob_tb;
         .commit_write_ports(commit_ports),
         .commit_store_ids(store_ids),
         .commit_store_vals(store_vals),
-        .rob_head(head),
-        .rob_tail(tail)
+        .rob_head(head)
     );
+
+    assign tail = dut.rob_tail;
 
     //=========================================================================
     // Clock Generation
@@ -108,7 +106,7 @@ module rob_tb;
         repeat(2) @(posedge clk);
         rst = 0;
         @(posedge clk);
-        #1; // Let combinational logic settle
+        #1;
     endtask
 
     function automatic rob_entry_t make_entry(
@@ -130,30 +128,24 @@ module rob_tb;
         return entry;
     endfunction
 
-    // 2-cycle allocation and dispatch
+    // Single-cycle allocate and dispatch
+    // All signals set together, captured on next posedge
     task allocate_and_dispatch(
         input rob_entry_t e0,
         input rob_entry_t e1,
-        input logic [1:0] count  // 01, 10, or 11
+        input logic [1:0] count
     );
-        // Cycle 1: Request allocation
+        // Set allocation request and dispatch signals together
         alloc_req = count;
-        @(posedge clk);
+        rob_we = count;
+        if (count[0]) rob_entries[0] = e0;
+        if (count[1]) rob_entries[1] = e1;
         
-        // Cycle 2: Dispatch with reserved tags
+        @(posedge clk);
+        #1;
+        
+        // Clear all signals
         alloc_req = '0;
-        if (count[0]) begin
-            rob_we[0] = 1'b1;
-            rob_entries[0] = e0;
-        end
-        if (count[1]) begin
-            rob_we[1] = 1'b1;
-            rob_entries[1] = e1;
-        end
-        @(posedge clk);
-        #1; // Let combinational logic settle
-        
-        // Cycle 3: Clear dispatch signals
         rob_we = '0;
         rob_entries = '{default: '0};
     endtask
@@ -169,7 +161,7 @@ module rob_tb;
         cdb_ports[port].result = result;
         cdb_ports[port].exception = exception;
         @(posedge clk);
-        #1; // Let combinational logic settle
+        #1;
         cdb_ports[port] = '{default: '0};
     endtask
 
@@ -179,22 +171,16 @@ module rob_tb;
         input logic [TEST_TAG_WIDTH-1:0] tag1,
         input logic [CPU_DATA_BITS-1:0] result1
     );
-        cdb_ports[0].is_valid = 1'b1;
-        cdb_ports[0].dest_tag = tag0;
-        cdb_ports[0].result = result0;
-        cdb_ports[0].exception = 1'b0;
-        cdb_ports[1].is_valid = 1'b1;
-        cdb_ports[1].dest_tag = tag1;
-        cdb_ports[1].result = result1;
-        cdb_ports[1].exception = 1'b0;
+        cdb_ports[0] = '{is_valid: 1'b1, dest_tag: tag0, result: result0, exception: 1'b0};
+        cdb_ports[1] = '{is_valid: 1'b1, dest_tag: tag1, result: result1, exception: 1'b0};
         @(posedge clk);
-        #1; // Let combinational logic settle
+        #1;
         cdb_ports = '{default: '0};
     endtask
 
     task wait_cycles(input int n);
         repeat(n) @(posedge clk);
-        #1; // Let combinational logic settle after last cycle
+        #1;
     endtask
 
     //=========================================================================
@@ -205,17 +191,8 @@ module rob_tb;
         $dumpfile("rob_tb.vcd");
         $dumpvars(0, rob_tb);
         
-        // Dump DUT internals
-        for (int i = 0; i < TEST_ROB_SIZE; i++) begin
-            $dumpvars(0, rob_tb.dut.rob_mem[i]);
-            $dumpvars(0, rob_tb.dut.rob_mem_next[i]);
-        end
-        for (int i = 0; i < PIPE_WIDTH; i++) begin
-            $dumpvars(0, rob_tb.dut.reserved_tags[i]);
-        end
-        
         $display("========================================");
-        $display("  ROB Testbench Started");
+        $display("  ROB Testbench (Single-Cycle Alloc)");
         $display("  ROB_SIZE = %0d", TEST_ROB_SIZE);
         $display("  PIPE_WIDTH = %0d", PIPE_WIDTH);
         $display("========================================\n");
@@ -251,11 +228,15 @@ module rob_tb;
               $sformatf("Expected: 2, Got: %0d", tail));
         check("Available slots decreased", dut.avail_slots == TEST_ROB_SIZE - 2,
               $sformatf("Expected: %0d, Got: %0d", TEST_ROB_SIZE - 2, dut.avail_slots));
+        check("Entry 0 valid", dut.rob_mem[0].is_valid,
+              $sformatf("Expected: 1, Got: %0d", dut.rob_mem[0].is_valid));
+        check("Entry 1 valid", dut.rob_mem[1].is_valid,
+              $sformatf("Expected: 1, Got: %0d", dut.rob_mem[1].is_valid));
         
         // Writeback and commit
         writeback_dual(3'd0, 32'hDEADBEEF, 3'd1, 32'hCAFEBABE);
 
-        check("Both entries commit (we)", commit_ports[0].we && commit_ports[1].we,
+        check("Both entries commit", commit_ports[0].we && commit_ports[1].we,
               $sformatf("Expected: we[0]=1 & we[1]=1, Got: we[0]=%0d & we[1]=%0d",
                        commit_ports[0].we, commit_ports[1].we));
         check("Correct data committed", 
@@ -264,7 +245,7 @@ module rob_tb;
                        commit_ports[0].data, commit_ports[1].data));
         
         @(posedge clk);
-        #1; // Let combinational logic settle
+        #1;
         check("Head advanced", head == 2,
               $sformatf("Expected: 2, Got: %0d", head));
         check("ROB empty", head == tail,
@@ -303,7 +284,7 @@ module rob_tb;
                        commit_ports[0].we, commit_ports[1].we));
         
         @(posedge clk);
-        #1; // Let combinational logic settle
+        #1;
         check("Remaining entries commit", commit_ports[0].we && commit_ports[1].we,
               $sformatf("Expected: we[0]=1 & we[1]=1, Got: we[0]=%0d & we[1]=%0d",
                        commit_ports[0].we, commit_ports[1].we));
@@ -321,8 +302,8 @@ module rob_tb;
             2'b11
         );
         
-        // Branch taken (mispredicted)
-        writeback_single(3'd0, 32'hDEADBEE1);  // LSB=1
+        // Branch taken (mispredicted) - LSB=1 indicates mispredict
+        writeback_single(3'd0, 32'hDEADBEE1);
         
         check("Flush asserted", flush,
               $sformatf("Expected: 1, Got: %0d", flush));
@@ -332,7 +313,7 @@ module rob_tb;
               $sformatf("Expected: we=0, Got: we=%0d", commit_ports[0].we));
         
         @(posedge clk);
-        #1; // Let combinational logic settle
+        #1;
         check("ROB flushed", head == 0 && tail == 0,
               $sformatf("Expected: head=0 & tail=0, Got: head=%0d & tail=%0d", head, tail));
         $display("");
@@ -408,27 +389,25 @@ module rob_tb;
         
         // Try to allocate when full
         alloc_req = 2'b11;
-        @(posedge clk);
-        #1; // Let combinational logic settle
+        #1;
         check("Allocation denied when full", alloc_gnt == 2'b00,
               $sformatf("Expected: 2'b00, Got: 2'b%b", alloc_gnt));
         alloc_req = '0;
-        @(posedge clk);
-        #1; // Let combinational logic settle
         
         // Free up space
         writeback_dual(3'd0, 32'h11111111, 3'd1, 32'h22222222);
         
         @(posedge clk);
-        #1; // Let combinational logic settle
+        #1;
         check("Space available after commit", dut.avail_slots == 2,
               $sformatf("Expected: 2, Got: %0d", dut.avail_slots));
         
         // Try again
         alloc_req = 2'b11;
-        #1; // Let combinational logic settle
+        #1;
         check("Allocation succeeds", alloc_gnt == 2'b11,
               $sformatf("Expected: 2'b11, Got: 2'b%b", alloc_gnt));
+        alloc_req = '0;
         $display("");
 
         //---------------------------------------------------------------------
@@ -439,8 +418,9 @@ module rob_tb;
         
         $display("  Testing wraparound at boundary...");
         
-        // Fill and drain multiple times to exercise wraparound
         for (int cycle = 0; cycle < 2; cycle++) begin
+            automatic logic [TEST_TAG_WIDTH-1:0] base_tag = tail;
+            
             // Fill
             for (int i = 0; i < TEST_ROB_SIZE/2; i++) begin
                 allocate_and_dispatch(
@@ -450,12 +430,16 @@ module rob_tb;
                 );
             end
             
-            // Drain
+            // Drain using calculated tags
             for (int i = 0; i < TEST_ROB_SIZE/2; i++) begin
-                writeback_dual(i*2, 32'h00000000 + i, i*2+1, 32'h10000000 + i);
+                automatic logic [TEST_TAG_WIDTH-1:0] tag0 = (base_tag + i*2) % TEST_ROB_SIZE;
+                automatic logic [TEST_TAG_WIDTH-1:0] tag1 = (base_tag + i*2 + 1) % TEST_ROB_SIZE;
+                writeback_dual(tag0, 32'h00000000 + i, tag1, 32'h10000000 + i);
+                @(posedge clk);
+                #1;
             end
             
-            wait_cycles(2);
+            wait_cycles(1);
             check($sformatf("Cycle %0d: ROB empty", cycle), 
                   head == tail && dut.avail_slots == TEST_ROB_SIZE,
                   $sformatf("Expected: head==tail & avail=%0d, Got: head=%0d tail=%0d avail=%0d",
@@ -464,34 +448,60 @@ module rob_tb;
         $display("");
 
         //---------------------------------------------------------------------
-        // TEST 9: CDB Bypass
+        // TEST 9: CDB Same-Cycle Bypass
         //---------------------------------------------------------------------
         $display("[TEST 9] CDB Same-Cycle Bypass");
         reset_dut();
         
+        // Dispatch and writeback in same cycle
         alloc_req = 2'b01;
-        @(posedge clk);
-        #1; // Let combinational logic settle
-        
-        // Dispatch and writeback same cycle
-        rob_we[0] = 1'b1;
+        rob_we = 2'b01;
         rob_entries[0] = make_entry(32'h00008000, 5'd7, OPC_ARI_ITYPE);
-        cdb_ports[0] = '{
-            is_valid: 1'b1,
-            dest_tag: 3'd0,
-            result: 32'h12345678,
-            exception: 1'b0
-        };
+        cdb_ports[0] = '{is_valid: 1'b1, dest_tag: 3'd0, result: 32'h12345678, exception: 1'b0};
+        
         @(posedge clk);
-        #1; // Let combinational logic settle
+        #1;
         
         check("Bypass worked", dut.rob_mem[0].is_ready,
               $sformatf("Expected: ready=1, Got: ready=%0d", dut.rob_mem[0].is_ready));
         check("Correct data", dut.rob_mem[0].result == 32'h12345678,
               $sformatf("Expected: 0x12345678, Got: 0x%h", dut.rob_mem[0].result));
         
+        alloc_req = '0;
         rob_we = '0;
+        rob_entries = '{default: '0};
         cdb_ports = '{default: '0};
+        $display("");
+
+        //---------------------------------------------------------------------
+        // TEST 10: Single Instruction Allocation (Compacted)
+        //---------------------------------------------------------------------
+        $display("[TEST 10] Single Instruction Allocation");
+        reset_dut();
+        
+        // Allocate single instruction via slot 0 (compacted input)
+        allocate_and_dispatch(
+            make_entry(32'h00009000, 5'd10, OPC_ARI_ITYPE),
+            '{default: '0},
+            2'b01
+        );
+        
+        check("Tail advanced by 1", tail == 1,
+              $sformatf("Expected: 1, Got: %0d", tail));
+        check("Entry 0 valid", dut.rob_mem[0].is_valid,
+              $sformatf("Expected: 1, Got: %0d", dut.rob_mem[0].is_valid));
+        
+        // Allocate another single instruction via slot 0 (compacted - always use slot 0 first)
+        allocate_and_dispatch(
+            make_entry(32'h00009004, 5'd11, OPC_ARI_ITYPE),
+            '{default: '0},
+            2'b01
+        );
+        
+        check("Tail advanced by 1 more", tail == 2,
+              $sformatf("Expected: 2, Got: %0d", tail));
+        check("Entry 1 valid", dut.rob_mem[1].is_valid,
+              $sformatf("Expected: 1, Got: %0d", dut.rob_mem[1].is_valid));
         $display("");
 
         //---------------------------------------------------------------------

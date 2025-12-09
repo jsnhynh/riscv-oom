@@ -16,10 +16,7 @@
  *   inst[0] → channel 0, inst[1] → channel 1
  * - If inst[0] and inst[1] target DIFFERENT RSs:
  *   inst[0] → channel 0 of its RS
- *   inst[1] → channel 0 of its RS (compacted!)
- *
- * This reduces pressure on reservation stations by utilizing available
- * channel 0 slots instead of always using channel 1 for inst[1].
+ *   inst[1] → channel 0 of its RS
  */
 
 import riscv_isa_pkg::*;

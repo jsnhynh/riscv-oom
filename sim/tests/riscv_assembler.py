@@ -261,7 +261,12 @@ for i in range(0,len(instr_arr)):
     # base instruction set
     instruction = instr_arr[i].split()
     if (instruction[0] == 'lui'):
-        imm = str(bin(int(instruction[2][2:],16))[2:])
+        #imm = str(bin(int(instruction[2][2:],16))[2:])
+        if ('0x' in instruction[2]):
+            imm = str(bin(int(instruction[2][2:],16))[2:])  # Hex
+        else:
+            imm = str(bin(int(instruction[2]))[2:])         # Decimal
+
         if (int(imm,2) > 2**20 - 1):
             raise ValueError("Line %d: Immediate value must be less than 2^20." % i)
             exit
@@ -271,7 +276,11 @@ for i in range(0,len(instr_arr)):
         PC_cnt = write_to_file(mem_line, PC_cnt)
 
     elif (instruction[0] == 'auipc'):
-        imm = str(bin(int(instruction[2][2:],16))[2:])
+        #imm = str(bin(int(instruction[2][2:],16))[2:])
+        if ('0x' in instruction[2]):
+            imm = str(bin(int(instruction[2][2:],16))[2:])  # Hex
+        else:
+            imm = str(bin(int(instruction[2]))[2:])         # Decimal
         if (int(imm,2) > 2**20 - 1):
             raise ValueError("Line %d: Immediate value must be less than 2^20." % i)
             exit
