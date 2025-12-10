@@ -11,7 +11,7 @@
 import riscv_isa_pkg::*;
 import uarch_pkg::*;
 
-module cpu #(parameter SIMPLE_MEM_MODE = 1) (input clk, rst);
+module cpu #(parameter TEST_FILE = "rv32im_test.hex", parameter SIMPLE_MEM_MODE = 1) (input clk, rst);
     logic                       imem_req_rdy;
     logic                       imem_req_val;
     logic [CPU_ADDR_BITS-1:0]   imem_req_packet;
@@ -45,7 +45,7 @@ module cpu #(parameter SIMPLE_MEM_MODE = 1) (input clk, rst);
 
     generate
         if (SIMPLE_MEM_MODE) begin
-            mem_simple mem (
+            mem_simple #(.IMEM_HEX_FILE(TEST_FILE)) mem (
                 .clk(clk),
                 .rst(rst),
                 // IMEM Ports

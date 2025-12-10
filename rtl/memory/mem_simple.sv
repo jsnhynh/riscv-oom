@@ -93,6 +93,7 @@ module mem_simple #(
         if (rst) begin
             imem_req_addr_d <= '0;
             imem_req_val_d  <= 1'b0;
+            $display("IMEM: Loading word-hex '%s' (target %0d words)", IMEM_HEX_FILE, IMEM_WORDS);
         end else if (imem_req_val && imem_rec_rdy) begin
             imem_req_addr_d <= imem_req_packet;
             imem_req_val_d  <= imem_req_val;

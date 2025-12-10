@@ -34,7 +34,7 @@ module rename (
     // Ports from ROB (commit)
     input  prf_commit_write_port_t  commit_write_ports  [PIPE_WIDTH-1:0]
 );
-
+ 
     //-------------------------------------------------------------
     // Internal Wires and Connections
     //-------------------------------------------------------------
@@ -115,7 +115,7 @@ module rename (
             (d_inst.opcode != OPC_JAL) &&
             (d_inst.opcode != OPC_BRANCH))
         begin
-            r_inst.src_0_a.data         = rs1_port.data;
+            r_inst.src_0_a.data         = (rs1_port.is_renamed)? '0:rs1_port.data;
             r_inst.src_0_a.tag          = rs1_port.tag;
             r_inst.src_0_a.is_renamed   = rs1_port.is_renamed;
         end else begin
@@ -124,7 +124,7 @@ module rename (
 
         // Source 0 (ALU operand B): IMM or RS2
         if ((d_inst.src_0_b.tag == d_inst.src_1_b.tag) && (d_inst.opcode == OPC_ARI_RTYPE)) begin
-            r_inst.src_0_b.data         = rs2_port.data;
+            r_inst.src_0_b.data         = (rs2_port.is_renamed)? '0:rs2_port.data;
             r_inst.src_0_b.tag          = rs2_port.tag;
             r_inst.src_0_b.is_renamed   = rs2_port.is_renamed;
         end else begin
@@ -132,11 +132,11 @@ module rename (
         end
 
         // Source 1 (always register values for branches/stores)
-        r_inst.src_1_a.data         = rs1_port.data;
+        r_inst.src_1_a.data         = (rs1_port.is_renamed)? '0:rs1_port.data;;
         r_inst.src_1_a.tag          = rs1_port.tag;
         r_inst.src_1_a.is_renamed   = rs1_port.is_renamed;
 
-        r_inst.src_1_b.data         = rs2_port.data;
+        r_inst.src_1_b.data         = (rs2_port.is_renamed)? '0:rs2_port.data;;
         r_inst.src_1_b.tag          = rs2_port.tag;
         r_inst.src_1_b.is_renamed   = rs2_port.is_renamed;
 

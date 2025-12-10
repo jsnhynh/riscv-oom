@@ -93,6 +93,7 @@ always_comb begin
     agu_read_rdy = 1'b0;
     man_flush = 1'b0; 
     clear_p = 1'b0;
+    next_state = IDLE;
     case (state)
         IDLE : begin
             if(base_rs_write_rdy) rs_write_rdy = 1'b1;
@@ -138,7 +139,7 @@ always_comb begin
                 else next_state = VALID_ENTRY;
             end
         end
-
+        default: next_state = IDLE;
     endcase
 end
 

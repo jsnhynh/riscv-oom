@@ -141,6 +141,7 @@ always_comb begin
     rs_read_rdy = 1'b0;
     man_flush = 1'b0;
     debug = 1'b0;
+    next_state = IDLE;
     case (state)
         IDLE : begin
             rs_write_rdy = 1'b1;
@@ -178,6 +179,7 @@ always_comb begin
                  rs_write_rdy = 1'b0;
             end   
         end 
+        default: next_state = IDLE;
 
     endcase
 end

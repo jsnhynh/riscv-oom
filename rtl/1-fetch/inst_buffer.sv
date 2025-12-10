@@ -61,6 +61,8 @@ module inst_buffer (
         end 
 
         if (do_read) begin
+            inst_packet_reg[read_ptr] <= 'x;
+            pc_regs[read_ptr]         <= 'x;
             read_ptr <= (read_ptr == INST_BUF_DEPTH - 1) ? '0 : read_ptr + 1;
         end
         

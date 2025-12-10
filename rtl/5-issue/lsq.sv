@@ -247,10 +247,10 @@ logic [$clog2(STQ_DEPTH) : 0] count, wr_ptr, wr_ptr_nxt, rd_ptr;
       wr_ptr <= (wr_ptr == STQ_DEPTH-1) ? '0 : (wr_ptr + 1'b1);
       wr_ptr_nxt <= (wr_ptr_nxt == STQ_DEPTH-1) ? '0 : (wr_ptr_nxt + 1'b1);
     end
-    else if(push_mem[0] && push_mem[1]) begin
-      wr_ptr <= (wr_ptr_nxt == STQ_DEPTH - 1) ? '0  : (wr_ptr_nxt + 1'b1);
-      wr_ptr_nxt <= (wr_ptr_nxt + 'b1 == STQ_DEPTH - 1) ? '0 : (wr_ptr_nxt + 'd2);
-    end
+  else if(push_mem[0] && push_mem[1]) begin
+    wr_ptr <= (wr_ptr_nxt == STQ_DEPTH - 1) ? '0 : (wr_ptr_nxt + 1'b1);
+    wr_ptr_nxt <= (wr_ptr_nxt >= STQ_DEPTH - 2) ? (wr_ptr_nxt + 2 - STQ_DEPTH) : (wr_ptr_nxt + 2);
+  end
   end
     always_ff @(posedge clk) begin
     if (rst || flush) begin
