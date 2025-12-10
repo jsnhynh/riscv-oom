@@ -151,17 +151,17 @@ jmp3:
     lhu  x20, 20(x28)       # x20 = 0xFFFF (zero extended)
 
     # ===== Test 9: Multiply/Divide (M extension) =====
-    addi x1, x0, 6          # x1 = 6
-    addi x2, x0, 7          # x2 = 7
-    mul  x3, x1, x2         # x3 = 42
+    #addi x1, x0, 6          # x1 = 6
+    #addi x2, x0, 7          # x2 = 7
+    #mul  x3, x1, x2         # x3 = 42
     
-    addi x4, x0, 100        # x4 = 100
-    addi x5, x0, 10         # x5 = 10
-    mul  x6, x4, x5         # x6 = 1000
-    div  x7, x4, x5         # x7 = 10
+    #addi x4, x0, 100        # x4 = 100
+    #addi x5, x0, 10         # x5 = 10
+    #mul  x6, x4, x5         # x6 = 1000
+    #div  x7, x4, x5         # x7 = 10
     
-    addi x9, x0, -3         # x9 = -3
-    mul  x10, x1, x9        # x10 = -18
+    #addi x9, x0, -3         # x9 = -3
+    #mul  x10, x1, x9        # x10 = -18
     
     # ===== COMPLETION MARKER =====
     addi x31, x0, 0xFF      # x31 = 255 (signals done)

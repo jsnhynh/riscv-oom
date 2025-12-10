@@ -22,16 +22,16 @@ package riscv_isa_pkg;
     //-------------------------------------------------------------
 
     // -- Opcodes (Instruction bits 6:0) --
-    localparam logic [6:0] OPC_LUI         = 7'b0110111;
-    localparam logic [6:0] OPC_AUIPC       = 7'b0010111;
-    localparam logic [6:0] OPC_JAL         = 7'b1101111;
-    localparam logic [6:0] OPC_JALR        = 7'b1100111;
-    localparam logic [6:0] OPC_BRANCH      = 7'b1100011;
-    localparam logic [6:0] OPC_LOAD        = 7'b0000011;
-    localparam logic [6:0] OPC_STORE       = 7'b0100011;
-    localparam logic [6:0] OPC_ARI_ITYPE   = 7'b0010011; // Arithmetic I-Type
-    localparam logic [6:0] OPC_ARI_RTYPE   = 7'b0110011; // Arithmetic R-Type
-    localparam logic [6:0] OPC_CSR         = 7'b1110011;
+    localparam logic [6:0] OPC_LUI         = 7'b0110111; // 0x37
+    localparam logic [6:0] OPC_AUIPC       = 7'b0010111; // 0x17
+    localparam logic [6:0] OPC_JAL         = 7'b1101111; // 0x6F
+    localparam logic [6:0] OPC_JALR        = 7'b1100111; // 0x67
+    localparam logic [6:0] OPC_BRANCH      = 7'b1100011; // 0x63
+    localparam logic [6:0] OPC_LOAD        = 7'b0000011; // 0x03
+    localparam logic [6:0] OPC_STORE       = 7'b0100011; // 0x23
+    localparam logic [6:0] OPC_ARI_ITYPE   = 7'b0010011; // 0x13 (Arithmetic I-Type)
+    localparam logic [6:0] OPC_ARI_RTYPE   = 7'b0110011; // 0x33 (Arithmetic R-Type)
+    localparam logic [6:0] OPC_CSR         = 7'b1110011; // 0x73
 
     // -- Funct3 for BRANCH Instructions --
     localparam logic [2:0] FNC_BEQ         = 3'b000;

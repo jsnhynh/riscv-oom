@@ -41,27 +41,36 @@ module inst_buffer (
   assign do_write = imem_rec_val && inst_buffer_rdy && ~flush;
   assign do_read  = decode_rdy && ~is_empty && ~flush;
 
+  logic [$clog2(INST_BUF_DEPTH):0] count;  // Extra bit for full count
+
+  assign is_full  = (count == INST_BUF_DEPTH);
+  assign is_empty = (count == 0);
+
   always_ff @(posedge clk or posedge rst or posedge flush) begin
     if (rst || flush) begin
-      read_ptr  <= '0;
-      write_ptr <= '0;
-      pc_regs <= '{default:'0};
-      inst_packet_reg <= '{default:'0};
+        read_ptr  <= '0;
+        write_ptr <= '0;
+        count     <= '0;
+        pc_regs <= '{default:'0};
+        inst_packet_reg <= '{default:'0};
     end else begin
-      if (do_write) begin // Write
-        inst_packet_reg[write_ptr]  <= imem_rec_packet;
-        pc_regs[write_ptr]          <= pc;
-        write_ptr                   <= write_ptr + 1;
-      end 
+        if (do_write) begin
+            inst_packet_reg[write_ptr] <= imem_rec_packet;
+            pc_regs[write_ptr]         <= pc;
+            write_ptr <= (write_ptr == INST_BUF_DEPTH - 1) ? '0 : write_ptr + 1;
+        end 
 
-      if (do_read) begin
-        read_ptr <= read_ptr + 1;
-      end
+        if (do_read) begin
+            read_ptr <= (read_ptr == INST_BUF_DEPTH - 1) ? '0 : read_ptr + 1;
+        end
+        
+        case ({do_write, do_read})
+            2'b10:   count <= count + 1;
+            2'b01:   count <= count - 1;
+            default: ;
+        endcase
     end
-  end
-
-  assign is_full  = (write_ptr + 1) == read_ptr;
-  assign is_empty = (read_ptr == write_ptr);
+end
 
   assign inst_buffer_rdy  = ~is_full;
 

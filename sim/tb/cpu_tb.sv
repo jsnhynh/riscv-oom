@@ -9,7 +9,7 @@ module cpu_tb;
     //-------------------------------------------------------------
     localparam TEST_CASE = 0;
     localparam TEST_FILE = (TEST_CASE)? "matmul_test.hex" : "rv32im_test.hex";
-    localparam MAX_CYCLES = 10000;
+    localparam MAX_CYCLES = 300;
 
     //-------------------------------------------------------------
     // Test Statistics

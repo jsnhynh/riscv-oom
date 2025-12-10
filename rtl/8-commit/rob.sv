@@ -76,7 +76,7 @@ module rob #(parameter N = ROB_ENTRIES)(
     assign rob_alloc_gnt[0] = rob_alloc_req[0] && (avail_slots >= req_cnt);
     assign rob_alloc_gnt[1] = rob_alloc_req[1] && (avail_slots >= req_cnt);
 
-    assign alloc_cnt = rob_alloc_gnt[0] + rob_alloc_gnt[1];
+    assign alloc_cnt = rob_we[0] + rob_we[1];
 
     // Tags are current tail positions - valid same cycle as grant
     assign rob_alloc_tags[0] = rob_alloc_gnt[0] ? rob_tail      : '0;
