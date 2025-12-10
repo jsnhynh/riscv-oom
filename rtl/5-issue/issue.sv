@@ -19,8 +19,8 @@ module issue (
     input  logic [NUM_FU-1:0]       fu_rdys,
     output instruction_t            fu_packets      [NUM_FU-1:0],
     
-    input  logic                    dmem_req_rdy,       // Backpressure to memory
-   // output writeback_packet_t       dmem_req_packet,    // From DMEM
+    // AGU Writeback
+    input  writeback_packet_t       agu_result,
 
     // Ports from ROB
     input  logic [TAG_WIDTH-1:0]    commit_store_ids    [PIPE_WIDTH-1:0],
@@ -28,9 +28,6 @@ module issue (
 
     // CDB
     input  writeback_packet_t       cdb_ports       [PIPE_WIDTH-1:0],
-
-    // AGU Writeback
-    input  writeback_packet_t       agu_result,
 
     // LSQ Forward
     output writeback_packet_t       forward_pkt,
@@ -61,36 +58,29 @@ module issue (
     //-------------------------------------------------------------
     // LSQ                                                   (1, 2)
     //-------------------------------------------------------------
-   // instruction_t mem_pkt;
-   // assign fu_packets[2] = (mem_pkt.is_valid === 1)? mem_pkt : '{default:'0};
-    lsq lsq_inst (
+    LSQ lsq_inst (
         .clk(clk),
         .rst(rst),
         .flush(flush),
         // Ports from Dispatch
-        .ld_lsq_rdy(rs_rdys[1]),
-        .st_lsq_rdy(rs_rdys[2]),
-        .ld_lsq_we(rs_wes[1]),
-        .st_lsq_we(rs_wes[2]),
-        .ld_lsq_entry(rs_issue_ports[1]),
-        .st_lsq_entry(rs_issue_ports[2]),
-        // Ports to Execute
-        .cache_stall((~fu_rdys[2])),
-       // .execute_pkt(mem_pkt),
+        .ld_rdy(rs_rdys[1]),
+        .ld_we(rs_wes[1]),
+        .ld_entries_in(rs_issue_ports[1]),
+        .st_rdy(rs_rdys[2]),
+        .st_we(rs_wes[2]),
+        .st_entries_in(rs_issue_ports[2]),
+        // Ports to/from Execute
+        .dmem_rdy(fu_rdys[2]),
+        .dmem_pkt(fu_packets[2]),
         .agu_rdy(fu_rdys[3]),
-        .agu_execute_pkt(fu_packets[3]),
-
-        .agu_result(agu_result),
-
-        .alu_rdy(dmem_req_rdy),     // ?
-        .execute_pkt(fu_packets[2]),
-        .forward_pkt(forward_pkt), 
-        .forward_rdy(),
-        .forward_re('0),
-        
+        .agu_pkt(fu_packets[3]),
+        .agu_result(agu_result),        
         // CDB
         .cdb_ports(cdb_ports),
-        .rob_head(rob_head)
+        // ROB
+        .rob_head(rob_head),
+        .commit_store_ids(commit_store_ids),
+        .commit_store_vals(commit_store_vals)
     );
 
     //-------------------------------------------------------------
@@ -112,7 +102,6 @@ module issue (
         .fu_packets(mdu_packet),
         // Wakeup Interface
         .cdb_ports(cdb_ports),
-
         // Age Tracking
         .rob_head(rob_head)
     );

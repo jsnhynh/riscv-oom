@@ -25,10 +25,9 @@ import uarch_pkg::*;
     input logic agu_rdy,
     output instruction_t agu_execute_pkt,
     input writeback_packet_t agu_result,
-    //FORWARD 
-    output writeback_packet_t forward_pkt,
-    output logic forward_rdy,
-    input logic forward_re,
+    //ROB PERMISSION 2 SPANK
+    input  logic [TAG_WIDTH-1:0]    commit_store_ids    [PIPE_WIDTH-1:0],
+    input  logic [PIPE_WIDTH-1:0]   commit_store_vals,
     //ROB
     input  logic [TAG_WIDTH-1:0]    rob_head 
 );
@@ -203,7 +202,7 @@ end
 genvar j;
 generate
     for (j = 0; j < STQ_DEPTH; j++ ) begin
-        lsq_rs st_rs(
+        lsq_rs_st st_rs(
         .clk(clk), 
         .rst(rst), 
         .flush(flush), 
@@ -225,7 +224,8 @@ generate
         .agu_execute_pkt(agu_execute_pkt_arr[j + RS_SIZE]),
         .agu_port(agu_result),
         //Forward 
-        .store_q(dummy_stq),
+        .commit_store_ids(commit_store_ids),
+        .commit_store_vals(commit_store_vals),
         .rob_head(rob_head)
         //.forward_re('0),
         //.forward_pkt(),

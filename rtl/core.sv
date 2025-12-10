@@ -147,20 +147,19 @@ module core (
         // Ports to Execute
         .fu_rdys(fu_rdys),
         .fu_packets(fu_packets),
-        .dmem_req_rdy(dmem_req_rdy),
-        //.dmem_req_packet(fu_packets[2]),
+        // AGU Writeback
+        .agu_result(agu_result),
         // Ports from ROB
         .commit_store_ids(commit_store_ids),
         .commit_store_vals(commit_store_vals),
         // CDB
         .cdb_ports(cdb_ports),
-        // AGU Writeback
-        .agu_result(agu_result),
         // LSQ Forward
         .forward_pkt(forward_pkt),
         // ROB Head
         .rob_head(rob_head)
     );
+    assign fu_rdys[2] = dmem_req_rdy;
 
     //-------------------------------------------------------------
     // 6-Execute
@@ -184,6 +183,7 @@ module core (
         .dmem_rec_packet(dmem_rec_packet),
         .forward_pkt(forward_pkt)
     );
+
 
     //-------------------------------------------------------------
     // 7-Writeback

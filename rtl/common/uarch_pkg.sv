@@ -71,7 +71,6 @@ package uarch_pkg;
         logic is_valid;
         logic has_rd;
         logic br_taken;         // Set to 1 if jump, can be later used for Branch Prediction
-        logic agu_comp;
         logic [6:0] opcode;
         logic [6:0] funct7;
     } instruction_t;

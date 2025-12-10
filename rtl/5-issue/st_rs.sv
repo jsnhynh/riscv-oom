@@ -1,4 +1,4 @@
-module lsq_rs
+module lsq_rs_st
 import riscv_isa_pkg::*; 
 import uarch_pkg::*;
  #(
@@ -26,15 +26,14 @@ import uarch_pkg::*;
     output instruction_t agu_execute_pkt,
     input writeback_packet_t agu_port,
 
-    //Forwarding ports, super high cost
-    //in the future maybe switch to an address buffer, or with a fast l1 cache maybe j remove forwarding?
-    //compiler can deal with it, doesn't feel worth
-    input instruction_t store_q [STQ_DEPTH],
+    //ROB PERMISSION
+    input  logic [TAG_WIDTH-1:0]    commit_store_ids    [PIPE_WIDTH-1:0],
+    input  logic [PIPE_WIDTH-1:0]   commit_store_vals,
     //rob_head
     input  logic [TAG_WIDTH-1:0]    rob_head
 );
 //instruction_t fwd_entry;
-logic forward_match;
+logic rob_perm_grant, clear_p;
 logic base_rs_write_rdy, base_rs_read_rdy, agu_we, man_flush;
 instruction_t muxed_rs_entry, agu_rs_entry;
 rs rs (
@@ -91,11 +90,15 @@ always_comb begin
     rs_read_rdy = 1'b0;
     agu_read_rdy = 1'b0;
     man_flush = 1'b0; 
+    clear_p = 1'b0;
     case (state)
         IDLE : begin
             if(base_rs_write_rdy) rs_write_rdy = 1'b1;
             if(rs_we) next_state = WAIT_REG;
-            else next_state = IDLE;
+            else begin
+                next_state = IDLE;
+                clear_p = 1'b1;
+            end
         end 
         WAIT_REG : begin
             if(base_rs_read_rdy)begin
@@ -116,13 +119,14 @@ always_comb begin
             end
         end
         VALID_ENTRY : begin
-            if(forward_match) begin
+            if(!rob_perm_grant) begin
                 next_state = VALID_ENTRY;
             end
             else begin
                 rs_read_rdy = 1'b1;
                 if(alu_re) begin
                     rs_write_rdy = 1'b1;
+                    clear_p = 1'b1;
                     if(rs_we) next_state = WAIT_REG;
                     else begin
                         man_flush = 1'b1;
@@ -136,27 +140,14 @@ always_comb begin
     endcase
 end
 
-//something aint right here
-function bit find_fwd();
-    bit out;
-    out = '0;
-    foreach(store_q[i]) begin
-        if(((store_q[i].dest_tag - rob_head) < (execute_pkt.dest_tag - rob_head)) && store_q[i].is_valid) begin
-            if((store_q[i].src_0_a.data[31:2] == execute_pkt.src_0_a.data[31:2]) || (store_q[i].agu_comp != 1'b1)) begin 
-                out = 1;
-                break;
-            end
-        end
+always_ff @ (posedge clk) begin
+    if(rst || flush || clear_p) begin
+        rob_perm_grant <= 1'b0;
     end
-    return out;
-endfunction
-
-bit ff;
-always_comb begin 
-    ff = find_fwd();
-    if(ff != 0) forward_match = 1'b1;
-    else forward_match = 1'b0;
-
+    else begin
+            if((commit_store_vals[0] == 1'b1) && (commit_store_ids[0] == execute_pkt.dest_tag)) rob_perm_grant <= 1'b1;
+            else if ((commit_store_vals[1] == 1'b1) && (commit_store_ids[1] == execute_pkt.dest_tag)) rob_perm_grant <= 1'b1;
+    end
 end
 
 

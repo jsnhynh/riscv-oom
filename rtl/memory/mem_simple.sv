@@ -21,7 +21,6 @@ module mem_simple #(
     parameter int unsigned FETCH_WIDTH     = 2,       // lanes per fetch (2-wide)
     // --- Preload files ---
     parameter string IMEM_HEX_FILE         = "rv32im_test.hex",    // WORD-PER-LINE 32-bit hex
-    // Optional: enable a console dump of the first few IMEM words after load
     parameter bit     IMEM_POSTLOAD_DUMP   = 1
 )(
     input  logic                        clk,
