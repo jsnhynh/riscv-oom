@@ -16,6 +16,7 @@
  * 3. Writeback: Snoops CDBs and updates entries with results
  * 4. Commit: Commits up to two instructions in-order
  * 5. Recovery: Detects mispredictions/exceptions and flushes pipeline
+ * 6. Bypass: Exposes entries for rename stage to read completed results
  */
 
 import riscv_isa_pkg::*;
@@ -35,6 +36,9 @@ module rob #(parameter N = ROB_ENTRIES)(
     
     // Ports to Rename (Commit)
     output prf_commit_write_port_t  commit_write_ports  [PIPE_WIDTH-1:0],
+
+    // Ports to Rename (Bypass) - Exposes ROB entries for value forwarding
+    output rob_entry_t              rob_read_entries    [N-1:0],
 
     // Ports from Dispatch (Entry Write) - Same cycle as allocation
     output logic [PIPE_WIDTH-1:0]   rob_rdy,
@@ -65,6 +69,12 @@ module rob #(parameter N = ROB_ENTRIES)(
     logic [$clog2(N):0] avail_slots;
     logic [1:0] alloc_cnt;
     logic [1:0] commit_cnt;
+
+    //-------------------------------------------------------------
+    // ROB Bypass Read Port
+    // Expose rob_mem_next for same-cycle CDB capture
+    //-------------------------------------------------------------
+    assign rob_read_entries = rob_mem_next;
 
     //-------------------------------------------------------------
     // Allocation Logic (Combinational - Single Cycle)
@@ -146,7 +156,7 @@ module rob #(parameter N = ROB_ENTRIES)(
             // Priority 3: Clear entries being committed
             if (((rob_head == tag) && (commit_cnt >= 1)) ||
                 ((rob_head_next == tag) && (commit_cnt >= 2))) begin
-                rob_mem_next[i] = '{default:'x};
+                rob_mem_next[i] = '{default:'0};
             end
         end
     end
@@ -154,7 +164,7 @@ module rob #(parameter N = ROB_ENTRIES)(
     always_ff @(posedge clk or posedge rst) begin
         if (rst || flush) begin
             for (int i = 0; i < N; i++) begin
-                rob_mem[i] <= '{default:'x};
+                rob_mem[i] <= '{default:'0};
             end
         end else begin
             rob_mem <= rob_mem_next;

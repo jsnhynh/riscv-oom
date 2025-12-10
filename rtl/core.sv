@@ -86,6 +86,7 @@ module core (
     logic [PIPE_WIDTH-1:0]  rob_alloc_req, rob_alloc_gnt;
     logic [TAG_WIDTH-1:0]   rob_alloc_tags      [PIPE_WIDTH-1:0];
     prf_commit_write_port_t commit_write_ports  [PIPE_WIDTH-1:0];
+    rob_entry_t             rob_entries_bypass  [ROB_ENTRIES-1:0];
     rename rename_stage (
         .clk(clk),
         .rst(rst),
@@ -100,7 +101,8 @@ module core (
         .rob_alloc_req(rob_alloc_req),
         .rob_alloc_gnt(rob_alloc_gnt),
         .rob_alloc_tags(rob_alloc_tags),
-        .commit_write_ports(commit_write_ports)
+        .commit_write_ports(commit_write_ports),
+        .rob_entries_bypass(rob_entries_bypass)
     );
 
     //-------------------------------------------------------------
@@ -219,7 +221,8 @@ module core (
         .commit_store_ids(commit_store_ids),
         .commit_store_vals(commit_store_vals),
         // ROB Pointers
-        .rob_head(rob_head)
+        .rob_head(rob_head),
+        .rob_read_entries(rob_entries_bypass)
     );
 
     assign dmem_req_packet = fu_packets[2];

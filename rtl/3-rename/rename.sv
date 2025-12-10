@@ -6,11 +6,18 @@
  * 2. ROB Allocation: Requests and is granted new tags from the ROB.
  * 3. PRF (RAT) Write: Writes the new speculative mappings (rd -> rob_tag) to the PRF.
  * 4. Dependency Forwarding: Resolves intra-group dependencies (e.g., inst1 depends on inst0).
- * 5. Commit Bypass: Detects same-cycle commit-rename hazards and bypasses committed data.
- * 6. Compaction: Ensures a single valid instruction is always in slot 0 for dispatch.
+ * 5. ROB Bypass: Forwards results from completed but uncommitted ROB entries.
+ * 6. Commit Bypass: Detects same-cycle commit-rename hazards and bypasses committed data.
+ * 7. Compaction: Ensures a single valid instruction is always in slot 0 for dispatch.
  *
  * Output is combinational - pipeline register lives in RS entries (via Dispatch).
  * ROB entry writes happen in Dispatch using reserved tags.
+ *
+ * Bypass Priority (highest to lowest):
+ *   1. Intra-group forwarding (inst[0].rd -> inst[1].rs)
+ *   2. ROB bypass (completed but not committed)
+ *   3. Commit bypass (committing this cycle)
+ *   4. PRF read (already committed)
  */
 import riscv_isa_pkg::*;
 import uarch_pkg::*;
@@ -32,7 +39,10 @@ module rename (
     input  logic [TAG_WIDTH-1:0]    rob_alloc_tags      [PIPE_WIDTH-1:0],
 
     // Ports from ROB (commit)
-    input  prf_commit_write_port_t  commit_write_ports  [PIPE_WIDTH-1:0]
+    input  prf_commit_write_port_t  commit_write_ports  [PIPE_WIDTH-1:0],
+
+    // Ports from ROB (bypass)
+    input  rob_entry_t              rob_entries_bypass  [ROB_ENTRIES-1:0]
 );
  
     //-------------------------------------------------------------
@@ -56,6 +66,28 @@ module rename (
         
         .commit_write_ports(commit_write_ports)
     );
+
+    //-------------------------------------------------------------
+    // ROB Bypass Logic
+    // Check if the tag has a completed result in the ROB
+    //-------------------------------------------------------------
+    function automatic source_t apply_rob_bypass(
+        input source_t src,
+        input rob_entry_t rob [ROB_ENTRIES-1:0]
+    );
+        source_t result = src;
+        
+        if (src.is_renamed) begin
+            // Index ROB directly by tag
+            if (rob[src.tag].is_valid && rob[src.tag].is_ready) begin
+                result.is_renamed = 1'b0;
+                result.data = rob[src.tag].result;
+                result.tag = '0;
+            end
+        end
+        
+        return result;
+    endfunction
 
     //-------------------------------------------------------------
     // Commit Bypass Logic
@@ -132,11 +164,11 @@ module rename (
         end
 
         // Source 1 (always register values for branches/stores)
-        r_inst.src_1_a.data         = (rs1_port.is_renamed)? '0:rs1_port.data;;
+        r_inst.src_1_a.data         = (rs1_port.is_renamed)? '0:rs1_port.data;
         r_inst.src_1_a.tag          = rs1_port.tag;
         r_inst.src_1_a.is_renamed   = rs1_port.is_renamed;
 
-        r_inst.src_1_b.data         = (rs2_port.is_renamed)? '0:rs2_port.data;;
+        r_inst.src_1_b.data         = (rs2_port.is_renamed)? '0:rs2_port.data;
         r_inst.src_1_b.tag          = rs2_port.tag;
         r_inst.src_1_b.is_renamed   = rs2_port.is_renamed;
 
@@ -149,6 +181,7 @@ module rename (
     instruction_t renamed_tmp     [PIPE_WIDTH-1:0];
     instruction_t renamed_fwd     [PIPE_WIDTH-1:0];
     instruction_t renamed_compact [PIPE_WIDTH-1:0];
+    instruction_t renamed_robbyp  [PIPE_WIDTH-1:0];
     logic all_gnts_ok;
 
     // Request ROB entries based on validity of incoming instructions
@@ -218,24 +251,43 @@ module rename (
     end
 
     //-------------------------------------------------------------
-    // Commit Bypass (applied to final output)
+    // ROB Bypass + Commit Bypass (applied to final output)
+    // Priority: ROB bypass first, then commit bypass
     //-------------------------------------------------------------
     always_comb begin
+        renamed_robbyp[0] = renamed_compact[0];
+        renamed_robbyp[1] = renamed_compact[1];
         renamed_insts[0] = renamed_compact[0];
         renamed_insts[1] = renamed_compact[1];
         
+        // Apply ROB bypass first (completed but not committed)
         if (renamed_compact[0].is_valid) begin
-            renamed_insts[0].src_0_a = apply_commit_bypass(renamed_compact[0].src_0_a, commit_write_ports);
-            renamed_insts[0].src_0_b = apply_commit_bypass(renamed_compact[0].src_0_b, commit_write_ports);
-            renamed_insts[0].src_1_a = apply_commit_bypass(renamed_compact[0].src_1_a, commit_write_ports);
-            renamed_insts[0].src_1_b = apply_commit_bypass(renamed_compact[0].src_1_b, commit_write_ports);
+            renamed_robbyp[0].src_0_a = apply_rob_bypass(renamed_compact[0].src_0_a, rob_entries_bypass);
+            renamed_robbyp[0].src_0_b = apply_rob_bypass(renamed_compact[0].src_0_b, rob_entries_bypass);
+            renamed_robbyp[0].src_1_a = apply_rob_bypass(renamed_compact[0].src_1_a, rob_entries_bypass);
+            renamed_robbyp[0].src_1_b = apply_rob_bypass(renamed_compact[0].src_1_b, rob_entries_bypass);
         end
         
         if (renamed_compact[1].is_valid) begin
-            renamed_insts[1].src_0_a = apply_commit_bypass(renamed_compact[1].src_0_a, commit_write_ports);
-            renamed_insts[1].src_0_b = apply_commit_bypass(renamed_compact[1].src_0_b, commit_write_ports);
-            renamed_insts[1].src_1_a = apply_commit_bypass(renamed_compact[1].src_1_a, commit_write_ports);
-            renamed_insts[1].src_1_b = apply_commit_bypass(renamed_compact[1].src_1_b, commit_write_ports);
+            renamed_robbyp[1].src_0_a = apply_rob_bypass(renamed_compact[1].src_0_a, rob_entries_bypass);
+            renamed_robbyp[1].src_0_b = apply_rob_bypass(renamed_compact[1].src_0_b, rob_entries_bypass);
+            renamed_robbyp[1].src_1_a = apply_rob_bypass(renamed_compact[1].src_1_a, rob_entries_bypass);
+            renamed_robbyp[1].src_1_b = apply_rob_bypass(renamed_compact[1].src_1_b, rob_entries_bypass);
+        end
+        
+        // Then apply commit bypass (committing this cycle)
+        if (renamed_robbyp[0].is_valid) begin
+            renamed_insts[0].src_0_a = apply_commit_bypass(renamed_robbyp[0].src_0_a, commit_write_ports);
+            renamed_insts[0].src_0_b = apply_commit_bypass(renamed_robbyp[0].src_0_b, commit_write_ports);
+            renamed_insts[0].src_1_a = apply_commit_bypass(renamed_robbyp[0].src_1_a, commit_write_ports);
+            renamed_insts[0].src_1_b = apply_commit_bypass(renamed_robbyp[0].src_1_b, commit_write_ports);
+        end
+        
+        if (renamed_robbyp[1].is_valid) begin
+            renamed_insts[1].src_0_a = apply_commit_bypass(renamed_robbyp[1].src_0_a, commit_write_ports);
+            renamed_insts[1].src_0_b = apply_commit_bypass(renamed_robbyp[1].src_0_b, commit_write_ports);
+            renamed_insts[1].src_1_a = apply_commit_bypass(renamed_robbyp[1].src_1_a, commit_write_ports);
+            renamed_insts[1].src_1_b = apply_commit_bypass(renamed_robbyp[1].src_1_b, commit_write_ports);
         end
     end
 
