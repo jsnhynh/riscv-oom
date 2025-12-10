@@ -85,6 +85,8 @@ always_ff @( posedge clk ) begin
     else state <= next_state;
 end
 
+logic rob_perm_0_cyc;
+assign rob_perm_0_cyc = (commit_store_vals[0] == 1'b1) && (commit_store_ids[0] == execute_pkt.dest_tag);
 always_comb begin
     rs_write_rdy = 1'b0;
     rs_read_rdy = 1'b0;
@@ -119,7 +121,7 @@ always_comb begin
             end
         end
         VALID_ENTRY : begin
-            if(!rob_perm_grant) begin
+            if(!rob_perm_grant && !rob_perm_0_cyc) begin
                 next_state = VALID_ENTRY;
             end
             else begin

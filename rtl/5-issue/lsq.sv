@@ -326,16 +326,27 @@ function int rb_agu_c();
 endfunction
 
 
+logic [3:0] outstanding_store_cnt;
+always_ff @ (posedge clk) begin
+  if(rst || flush) outstanding_store_cnt <= '0;
+  else begin
+    if (commit_store_vals == 2'b01 || commit_store_vals == 2'b10) outstanding_store_cnt <= outstanding_store_cnt + 4'd1 - st_alu_rdy;
+    else if (commit_store_vals == 2'b11) outstanding_store_cnt <= outstanding_store_cnt + 4'd2 - st_alu_rdy;
+    else outstanding_store_cnt <= outstanding_store_cnt - st_alu_rdy;
+  end
+end
+
+
 always_comb begin
   st_alu_rdy = 1'b0;
   ld_alu_rdy = 1'b0;
   if(alu_rdy) begin
     case ({pop_rdy, (ld_total_ready_entries > 0 )})
-      2'b01 : ld_alu_rdy = 1'b1;
+      2'b01 : ld_alu_rdy = (outstanding_store_cnt == 4'd0);
       2'b10 : st_alu_rdy = 1'b1;
       2'b11 : begin
-        if(st_execute_pkt.dest_tag - rob_head > ld_execute_pkt.dest_tag - rob_head ) st_alu_rdy = 1'b1;
-        else ld_alu_rdy = 1'b1;
+        /*if(st_execute_pkt.dest_tag - rob_head > ld_execute_pkt.dest_tag - rob_head )*/ st_alu_rdy = 1'b1;
+        //else ld_alu_rdy = 1'b1;
       end
       default : begin
         ld_alu_rdy = 1'b0;
