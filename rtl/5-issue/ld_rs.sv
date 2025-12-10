@@ -82,7 +82,7 @@ typedef enum logic [2:0] {
 state_t state, next_state;
 
 always_ff @( posedge clk ) begin
-    if(rst) state <= IDLE;
+    if(rst || flush) state <= IDLE;
     else state <= next_state;
 end
 

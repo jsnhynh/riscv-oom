@@ -19,8 +19,8 @@ module issue (
     input  logic [NUM_FU-1:0]       fu_rdys,
     output instruction_t            fu_packets      [NUM_FU-1:0],
     
-    // AGU Writeback
-    input  writeback_packet_t       agu_result,
+    input  logic                    dmem_req_rdy,       // Backpressure to memory
+   // output writeback_packet_t       dmem_req_packet,    // From DMEM
 
     // Ports from ROB
     input  logic [TAG_WIDTH-1:0]    commit_store_ids    [PIPE_WIDTH-1:0],
@@ -28,6 +28,9 @@ module issue (
 
     // CDB
     input  writeback_packet_t       cdb_ports       [PIPE_WIDTH-1:0],
+
+    // AGU Writeback
+    input  writeback_packet_t       agu_result,
 
     // LSQ Forward
     output writeback_packet_t       forward_pkt,
@@ -38,6 +41,21 @@ module issue (
     //-------------------------------------------------------------
     // ALU RS                                                   (0)
     //-------------------------------------------------------------
+    /* alu_rs alu_rs_inst (
+        .clk(clk),
+        .rst(rst),
+        .flush(flush),
+        .cache_stall('0),   // ALU SHOULD NOT BE BACKPRESSURED FROM DCACHE
+        // Ports from Dispatch
+        .rs_rdy(rs_rdys[0]),
+        .rs_we(rs_wes[0]),
+        .rs_entry(rs_issue_ports[0]),
+        // Ports to Execute
+        .alu_rdy(fu_rdys[1:0]),
+        .execute_pkt(fu_packets[1:0]),
+        // CDB
+        .cdb_ports(cdb_ports)
+    ); */
     reservation_station #(.NUM_ENTRIES(ALU_RS_ENTRIES), .ISSUE_WIDTH(2)) alu_rs_isnt (
         .clk(clk),
         .rst(rst),
@@ -58,35 +76,40 @@ module issue (
     //-------------------------------------------------------------
     // LSQ                                                   (1, 2)
     //-------------------------------------------------------------
-    LSQ lsq_inst (
+   // instruction_t mem_pkt;
+   // assign fu_packets[2] = (mem_pkt.is_valid === 1)? mem_pkt : '{default:'0};
+    lsq lsq_inst (
         .clk(clk),
         .rst(rst),
         .flush(flush),
         // Ports from Dispatch
-        .ld_rdy(rs_rdys[1]),
-        .ld_we(rs_wes[1]),
-        .ld_entries_in(rs_issue_ports[1]),
-        .st_rdy(rs_rdys[2]),
-        .st_we(rs_wes[2]),
-        .st_entries_in(rs_issue_ports[2]),
-        // Ports to/from Execute
-        .dmem_rdy(fu_rdys[2]),
-        .dmem_pkt(fu_packets[2]),
+        .ld_lsq_rdy(rs_rdys[1]),
+        .st_lsq_rdy(rs_rdys[2]),
+        .ld_lsq_we(rs_wes[1]),
+        .st_lsq_we(rs_wes[2]),
+        .ld_lsq_entry(rs_issue_ports[1]),
+        .st_lsq_entry(rs_issue_ports[2]),
+        // Ports to Execute
+        .cache_stall((~fu_rdys[2])),
+       // .execute_pkt(mem_pkt),
         .agu_rdy(fu_rdys[3]),
-        .agu_pkt(fu_packets[3]),
-        .agu_result(agu_result),        
+        .agu_execute_pkt(fu_packets[3]),
+
+        .agu_result(agu_result),
+
+        .alu_rdy(dmem_req_rdy),     // ?
+        .execute_pkt(fu_packets[2]),
+        .commit_store_ids(commit_store_ids),
+        .commit_store_vals(commit_store_vals),
         // CDB
         .cdb_ports(cdb_ports),
-        // ROB
-        .rob_head(rob_head),
-        .commit_store_ids(commit_store_ids),
-        .commit_store_vals(commit_store_vals)
+        .rob_head(rob_head)
     );
 
     //-------------------------------------------------------------
     // MDU RS                                                   (3)
     //-------------------------------------------------------------
-    // Local array for the MDU RS (ISSUE_WIDTH = 1)
+
     instruction_t mdu_packet [0:0];
     assign fu_packets[4] = mdu_packet[0];
     reservation_station #(.NUM_ENTRIES(MDU_RS_ENTRIES), .ISSUE_WIDTH(1)) mdu_rs_isnt (
@@ -102,9 +125,9 @@ module issue (
         .fu_packets(mdu_packet),
         // Wakeup Interface
         .cdb_ports(cdb_ports),
+
         // Age Tracking
         .rob_head(rob_head)
     );
-
 
 endmodule

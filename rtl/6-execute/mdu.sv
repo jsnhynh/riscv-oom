@@ -12,7 +12,7 @@ module mdu (
 );
     
 instruction_t in_reg;
-writeback_packet_t out_reg;
+//writeback_packet_t out_reg;
 logic comp_done, load_out, mul_a_sign_sel, mul_b_sign_sel, div_sign_sel;
 logic [CPU_DATA_BITS - 1 : 0] rs1, rs2, next_out; 
 
@@ -93,6 +93,7 @@ Divider_Top div (
 
 typedef enum logic [3:0] {
     IDLE,
+    START_MULT,
     WAIT_MULT,
     WAIT_DIV,
     WAIT_CDB
@@ -117,13 +118,17 @@ always_comb begin
             begin_divide = 1'b0;
             mdu_rdy = 1'b1;
             if(mdu_packet.is_valid) begin
-                if(mdu_packet.uop_0 <= 3'b011) next_state = WAIT_MULT;
+                if(mdu_packet.uop_0 <= 3'b011) next_state = START_MULT;
                 else next_state = WAIT_DIV;
             end
             else next_state = IDLE;
         end
-        WAIT_MULT : begin
+        START_MULT : begin
             begin_multiply = 1'b1;
+            next_state = WAIT_MULT;
+        end
+        WAIT_MULT : begin
+            //begin_multiply = 1'b1;
             if(multiplication_complete) begin
                 next_state = WAIT_CDB;
                 load_out = 1'b1;

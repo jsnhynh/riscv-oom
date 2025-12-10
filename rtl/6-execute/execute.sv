@@ -99,17 +99,19 @@ module execute (
     //-------------------------------------------------------------
     // MDU                                                      (4)
     //-------------------------------------------------------------
+    // TODO: Add MDU instantiation
+
     mdu mdu_inst (
-        .clk(clk),
-        .rst(rst),
-        .flush(flush),
-        // In
-        .mdu_rdy(fu_rdys[4]),
-        .mdu_packet(fu_packets[4]),
-        // Output
-        .mdu_result(fu_results[4]),
-        .mdu_cdb_gnt(fu_cdb_gnts[4])
+    .clk(clk), 
+    .rst(rst), 
+    .flush(flush),
+    .mdu_rdy(fu_rdys[4]),
+    .mdu_packet(fu_packets[4]),
+    .mdu_result(fu_results[4]),
+    .mdu_cdb_gnt(fu_cdb_gnts[4])
 );
 
+    //assign fu_results[4] = '{default:'0};
+    //assign fu_rdys[4] = 1'b0;
 
 endmodule

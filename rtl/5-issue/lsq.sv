@@ -239,7 +239,7 @@ logic full, empty, pop_rdy, pop_mem;
 logic [1:0] push_mem;
 logic [$clog2(STQ_DEPTH) : 0] count, wr_ptr, wr_ptr_nxt, rd_ptr;
   always_ff @(posedge clk ) begin
-    if (rst) begin
+    if (rst || flush) begin
       wr_ptr <= '0;
       wr_ptr_nxt <= 'b1;
     end 
@@ -253,14 +253,14 @@ logic [$clog2(STQ_DEPTH) : 0] count, wr_ptr, wr_ptr_nxt, rd_ptr;
     end
   end
     always_ff @(posedge clk) begin
-    if (rst) begin
+    if (rst || flush) begin
       rd_ptr <= '0;
     end else if (pop_mem) begin
       rd_ptr <= (rd_ptr == STQ_DEPTH-1) ? '0 : (rd_ptr + 1'b1);
     end
   end
    always_ff @(posedge clk) begin
-    if (rst) begin
+    if (rst || flush) begin
       count <= '0;
     end else begin
       unique case ({push_mem, pop_mem})
