@@ -51,28 +51,34 @@ module Divider_Top (
                 qoutient = q;
                 remainder = r;   
             end
-            else begin
-                rs1_true = rs1[31] ? (~rs1 + 32'd1) : rs1;
-                rs2_true = rs2[31] ? (~rs2 + 32'd1) : rs2;
-                case ({rs1[31] , rs2[31]})
-                    2'b00 : begin
-                       qoutient = q;
-                       remainder = r; 
-                    end 
-                    2'b10 : begin
-                        qoutient = q_neg;
-                        remainder = r;
-                    end
-                    2'b11 : begin
-                        qoutient = q;
-                        remainder = r_neg;
-                    end
-                    2'b01 : begin
-                        qoutient = q_neg;
-                        remainder = r_neg;
-                    end
-                endcase
-            end
+           else begin
+    rs1_true = rs1[31] ? (~rs1 + 32'd1) : rs1;
+    rs2_true = rs2[31] ? (~rs2 + 32'd1) : rs2;
+
+    case ({rs1[31], rs2[31]})
+        2'b00: begin
+            // + / +  => q +, r +
+            qoutient = q;
+            remainder = r;
+        end
+        2'b10: begin
+            // - / +  => q -, r -  (remainder follows rs1)
+            qoutient = q_neg;
+            remainder = r_neg;
+        end
+        2'b11: begin
+            // - / -  => q +, r -
+            qoutient = q;
+            remainder = r_neg;
+        end
+        2'b01: begin
+            // + / -  => q -, r +  (remainder follows rs1)
+            qoutient = q_neg;
+            remainder = r;
+        end
+    endcase
+end
+
         end
     end
     
