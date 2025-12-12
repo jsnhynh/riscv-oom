@@ -1,17 +1,16 @@
 /*
- * Commit Reorder Buffer (ROB) - Single-Cycle Allocation
+ * Commit Reorder Buffer (ROB)
  *
  * This module is the central controller for the out-of-order backend. It
  * is a circular buffer that tracks all in-flight instructions.
  *
- * Single-cycle allocation model:
  *   Same cycle: Rename requests → ROB grants → Dispatch writes entry
  *   
  *   Combinational path: alloc_req → alloc_gnt → rob_rdy → rob_we → rob_mem_next
  *   Sequential update:  rob_tail advances, rob_mem updates
  *
  * Responsibilities:
- * 1. Allocation: Grants tags to Rename (combinational)
+ * 1. Allocation: Grants tags to Rename
  * 2. Entry Write: Dispatch writes entries same cycle as allocation
  * 3. Writeback: Snoops CDBs and updates entries with results
  * 4. Commit: Commits up to two instructions in-order
@@ -29,7 +28,7 @@ module rob #(parameter N = ROB_ENTRIES)(
     output logic flush,
     output logic [CPU_ADDR_BITS-1:0] rob_pc,
 
-    // Ports to Rename (Allocation) - Combinational
+    // Ports to Rename (Allocation)
     input  logic [PIPE_WIDTH-1:0]   rob_alloc_req,
     output logic [PIPE_WIDTH-1:0]   rob_alloc_gnt,
     output logic [$clog2(N)-1:0]    rob_alloc_tags      [PIPE_WIDTH-1:0],
@@ -40,7 +39,7 @@ module rob #(parameter N = ROB_ENTRIES)(
     // Ports to Rename (Bypass) - Exposes ROB entries for value forwarding
     output rob_entry_t              rob_read_entries    [N-1:0],
 
-    // Ports from Dispatch (Entry Write) - Same cycle as allocation
+    // Ports from Dispatch (Entry Write)
     output logic [PIPE_WIDTH-1:0]   rob_rdy,
     input  logic [PIPE_WIDTH-1:0]   rob_we,
     input  rob_entry_t              rob_entries         [PIPE_WIDTH-1:0],
@@ -72,12 +71,11 @@ module rob #(parameter N = ROB_ENTRIES)(
 
     //-------------------------------------------------------------
     // ROB Bypass Read Port
-    // Expose rob_mem_next for same-cycle CDB capture
     //-------------------------------------------------------------
     assign rob_read_entries = rob_mem_next;
 
     //-------------------------------------------------------------
-    // Allocation Logic (Combinational - Single Cycle)
+    // Allocation Logic
     //-------------------------------------------------------------
     logic [1:0] req_cnt;
     assign req_cnt = rob_alloc_req[0] + rob_alloc_req[1];
@@ -129,7 +127,7 @@ module rob #(parameter N = ROB_ENTRIES)(
     endfunction
 
     //-------------------------------------------------------------
-    // ROB Entry Update Logic (Combinational)
+    // ROB Entry Update Logic
     //-------------------------------------------------------------
     always_comb begin
         rob_mem_next = rob_mem;
@@ -137,7 +135,7 @@ module rob #(parameter N = ROB_ENTRIES)(
         for (int i = 0; i < N; i++) begin
             automatic logic [$clog2(N)-1:0] tag = i;
             
-            // Priority 1: Dispatch writes (same cycle as allocation)
+            // Priority 1: Dispatch writes
             // Write to rob_tail (slot 0) and rob_tail_next (slot 1)
             if (rob_we[0] && rob_rdy[0] && (tag == rob_tail)) begin
                 rob_mem_next[i] = rob_entries[0];
@@ -148,7 +146,7 @@ module rob #(parameter N = ROB_ENTRIES)(
                 rob_mem_next[i].is_ready = (rob_entries[1].opcode == OPC_STORE);
             end
 
-            // Priority 2: CDB snoops (chained for same-cycle bypass)
+            // Priority 2: CDB snoops
             for (int j = 0; j < PIPE_WIDTH; j++) begin
                 rob_mem_next[i] = cdb_snoop(rob_mem_next[i], cdb_ports[j], tag);
             end

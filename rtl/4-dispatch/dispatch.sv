@@ -11,7 +11,7 @@
  *               instruction into the Reorder Buffer.
  * It provides the final backpressure signal to the Rename stage.
  *
- * COMPACTION LOGIC:
+ * Compaction Logic:
  * - If inst[0] and inst[1] target the SAME RS:
  *   inst[0] → channel 0, inst[1] → channel 1
  * - If inst[0] and inst[1] target DIFFERENT RSs:
@@ -129,7 +129,7 @@ module dispatch (
     
     assign rob_we = {dispatch_rdy && renamed_insts[1].is_valid, dispatch_rdy && renamed_insts[0].is_valid};
 
-    // -- Step 5: Assign Data to Output Ports (WITH COMPACTION ROUTING) --
+    // -- Step 5: Assign Data to Output Ports --
     // Smart routing: port[0] gets inst[0] if inst[0] targets this RS, else inst[1]
     // This enables compaction when inst[1] goes to different RS
     
