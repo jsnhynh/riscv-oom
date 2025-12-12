@@ -1,3 +1,4 @@
+// These modules were provided by Berkeley's EECS 151 course.
 `timescale 1ns/1ps
 
 // Register of D-Type Flip-flops

@@ -8,7 +8,7 @@ module cpu_tb;
     // Test Configuration
     //-------------------------------------------------------------
     localparam TEST_CASE = 0;
-    localparam TEST_FILE = (TEST_CASE)? "matmul_test.hex" : "rv32im_test.hex";
+    localparam TEST_FILE = (TEST_CASE == 0)? "rv32im_test.hex": (TEST_CASE == 1)? "matmul_test.hex" : "";
     localparam MAX_CYCLES = 300;
 
     //-------------------------------------------------------------

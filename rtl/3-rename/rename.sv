@@ -1,5 +1,5 @@
 /*
- * Rename Stage (Combinational Output)
+ * Rename Stage
  *
  * This module performs register renaming for N instructions:
  * 1. PRF Read: Reads the status of source operands (rs1, rs2) for N instructions.
@@ -44,7 +44,7 @@ module rename (
     // Ports from ROB (bypass)
     input  rob_entry_t              rob_entries_bypass  [ROB_ENTRIES-1:0]
 );
- 
+
     //-------------------------------------------------------------
     // Internal Wires and Connections
     //-------------------------------------------------------------
