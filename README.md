@@ -16,6 +16,12 @@ This repository contains the SystemVerilog implementation of a dual-issue, 8-sta
 
 ---
 
+## Block Diagram
+
+![Core Block Diagram](./docs/block_diagram.png)
+
+---
+
 ## Core Features
 
 | Feature | Specification |
@@ -104,12 +110,6 @@ Multiple bypass paths ensure correct forwarding for back-to-back dependencies:
 | 3 | CDB | Results broadcasting this cycle |
 | 4 | Commit | Results committing this cycle |
 | 5 | PRF | Already committed values |
-
----
-
-## Block Diagram
-
-![Core Block Diagram](./docs/block_diagram.png)
 
 ---
 
