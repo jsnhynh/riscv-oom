@@ -134,8 +134,6 @@ task cdb_forward();
 endtask
 initial begin
     toggle_rst();
-    //rndm_tst();
-    //single_trasaction();
     cdb_forward();
 end
 

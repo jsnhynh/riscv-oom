@@ -135,29 +135,7 @@ function writeback_packet_t gen_random_cbd_pkt(logic [CPU_DATA_BITS-1:0] data_h,
     return out;
 endfunction
 
-// task rndm_tst();
-//     instruction_t j;
-//     forever begin
-//         if(rs_write_rdy == 1'b1) begin
-//             j = gen_random_instr_pkt(32'hffff_ffff, 32'h000_0000, 5'd8, 5'd0);
-//             rs_entry <= j;
-//             rs_we <= 1'b1;
 
-//         end
-//         @(posedge clk);
-//         rs_we <= 1'b0;
-//         while(rs_read_rdy == 1'b0) begin
-//             cdb_ports[0] <= gen_random_cbd_pkt(32'hffff_ffff, 32'h000_0000, 5'd8, 5'd5);
-//             cdb_ports[1] <= gen_random_cbd_pkt(32'hffff_ffff, 32'h000_0000, 5'd4, 5'd0);
-//             @(posedge clk);
-//         end
-//         if($time % 2 == 0) alu_re <= 1'b1;
-//         else begin
-//             alu_re <= 1'b1;
-//             @(posedge clk);
-//         end
-//     end
-// endtask
 
 function writeback_packet_t gen_agu(instruction_t agu_e_p);
     writeback_packet_t g;
@@ -208,19 +186,7 @@ instruction_t temp;
     
 endtask
 
-// task cdb_forward();
-//      if(rs_write_rdy == 1'b1) begin
-//         rs_entry = gen_random_instr_pkt(32'hffff_ffff, 32'h000_0000, 5'd8, 5'd8, 2); //tag is 8, renamed
-//         cdb_ports[0] <= gen_random_cbd_pkt(32'hffff_ffff, 32'h000_0000, 5'd8, 5'd8);
-//         rs_we <= 1'b1;
-//         @(posedge clk);
-//         rs_we <= 1'b0;
-//         @(posedge clk);      
-//         cdb_ports[0] <= '0;
-//         @(posedge clk);
-//         $finish;
-//     end
-// endtask
+
 initial begin
     toggle_rst();
     //rndm_tst();

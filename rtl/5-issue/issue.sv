@@ -41,21 +41,7 @@ module issue (
     //-------------------------------------------------------------
     // ALU RS                                                   (0)
     //-------------------------------------------------------------
-    /* alu_rs alu_rs_inst (
-        .clk(clk),
-        .rst(rst),
-        .flush(flush),
-        .cache_stall('0),   // ALU SHOULD NOT BE BACKPRESSURED FROM DCACHE
-        // Ports from Dispatch
-        .rs_rdy(rs_rdys[0]),
-        .rs_we(rs_wes[0]),
-        .rs_entry(rs_issue_ports[0]),
-        // Ports to Execute
-        .alu_rdy(fu_rdys[1:0]),
-        .execute_pkt(fu_packets[1:0]),
-        // CDB
-        .cdb_ports(cdb_ports)
-    ); */
+
     reservation_station #(.NUM_ENTRIES(ALU_RS_ENTRIES), .ISSUE_WIDTH(2)) alu_rs_isnt (
         .clk(clk),
         .rst(rst),
@@ -76,32 +62,7 @@ module issue (
     //-------------------------------------------------------------
     // LSQ                                                   (1, 2)
     //-------------------------------------------------------------
-   // instruction_t mem_pkt;
-   // assign fu_packets[2] = (mem_pkt.is_valid === 1)? mem_pkt : '{default:'0};
-    /* LSQ lsq_inst ( 
-        .clk(clk),
-        .rst(rst),
-        .flush(flush),
-        // Ports from Dispatch
-        .ld_rdy(rs_rdys[1]),
-        .ld_we(rs_wes[1]),
-        .ld_entries_in(rs_issue_ports[1]),
-        .st_rdy(rs_rdys[2]),
-        .st_we(rs_wes[2]),
-        .st_entries_in(rs_issue_ports[2]),
-        // Ports to/from Execute
-        .dmem_rdy(fu_rdys[2]),
-        .dmem_pkt(fu_packets[2]),
-        .agu_rdy(fu_rdys[3]),
-        .agu_pkt(fu_packets[3]),
-        .agu_result(agu_result),
-        // CDB
-        .cdb_ports(cdb_ports),
-        // ROB
-        .rob_head(rob_head),
-        .commit_store_ids(commit_store_ids),
-        .commit_store_vals(commit_store_vals)
-    ); */
+
     lsq lsq_inst (
         .clk(clk),
         .rst(rst),

@@ -139,9 +139,7 @@ instruction_t ld_execute_pkt, st_execute_pkt;
 always_comb begin
     //initialization / default values
     s = 0;
-    //foreach (ld_re_arr[i]) ld_re_arr[i] = 1'b0;
-    //foreach (ld_we_arr[i]) ld_we_arr[i] = 1'b0;
-    //foreach (ld_sel_arr[i]) ld_sel_arr[i] = 2'b0;
+
 
     //loop to choose which ld_res station to write to (we write to lowest arr available one, can either write to one or 2 at a time)
     for(int i = 0; i < RS_SIZE; i++) begin
@@ -181,9 +179,6 @@ always_comb begin
 end
 
 
-//logic to select open reservation stations and write to them
-//if possible  select lowest  2 reservation stations
-//if 1 res station open and 2 entries, select entry 0, and flip flip_count, next time select entry 1 and flip...
 
 
 logic [STQ_DEPTH - 1 : 0] st_we_arr;
@@ -345,8 +340,7 @@ always_comb begin
       2'b01 : ld_alu_rdy = (outstanding_store_cnt == 4'd0);
       2'b10 : st_alu_rdy = 1'b1;
       2'b11 : begin
-        /*if(st_execute_pkt.dest_tag - rob_head > ld_execute_pkt.dest_tag - rob_head )*/ st_alu_rdy = 1'b1;
-        //else ld_alu_rdy = 1'b1;
+        st_alu_rdy = 1'b1;    
       end
       default : begin
         ld_alu_rdy = 1'b0;
@@ -384,6 +378,5 @@ end
 
 
 
-//execute pkt logic
 
 endmodule
