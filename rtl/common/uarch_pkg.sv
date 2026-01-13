@@ -43,6 +43,18 @@ package uarch_pkg;
         4: MDU 
     */
 
+    /* Branch Prediction Types */
+    localparam FTQ_DEPTH   = 16;
+    localparam GHR_WIDTH   = 32;
+    localparam RAS_DEPTH   = 16;
+    localparam TAGE_TABLES = 4;
+
+    // Branch types (for BTB)
+    localparam BRANCH_COND = 2'b00;
+    localparam BRANCH_JUMP = 2'b01;
+    localparam BRANCH_CALL = 2'b10;
+    localparam BRANCH_RET  = 2'b11;
+
     /*
         The following structs is used to pass decoded instructions down the pipeline to the FU
     */
@@ -70,7 +82,7 @@ package uarch_pkg;
         // Control Signals
         logic is_valid;
         logic has_rd;
-        logic br_taken;         // Set to 1 if jump, can be later used for Branch Prediction
+        //logic br_taken;         // Set to 1 if jump, can be later used for Branch Prediction
         logic agu_comp;
         logic [6:0] opcode;
         logic [6:0] funct7;
@@ -107,6 +119,10 @@ package uarch_pkg;
 
         // Control Flow Information
         logic [6:0]                 opcode;
+
+        // FTQ
+        logic has_ftq;
+        logic [$clog2(FTQ_DEPTH)-1:0] ftq_idx;
     } rob_entry_t;
 
     //-------------------------------------------------------------
@@ -124,5 +140,38 @@ package uarch_pkg;
         logic [TAG_WIDTH-1:0]           tag;
         logic                           we;
     } prf_commit_write_port_t;
+
+    /* BP Stuff */
+
+    // BPU prediction output (to fetch)
+    typedef struct packed {
+        logic [1:0]                     pred_taken;
+        logic [CPU_ADDR_BITS-1:0]       pred_target;
+        logic [1:0]                     pred_hit;
+        logic [1:0]                     pred_types;     // Slot 0 [1:0], Slot 1 [3:2] - flattened
+    } bpu_pred_t;
+
+    // BPU metadata (stored in FTQ)
+    typedef struct packed {
+        logic [CPU_ADDR_BITS-1:0]       pc;
+        logic [GHR_WIDTH-1:0]           ghr;
+        logic [$clog2(RAS_DEPTH)-1:0]   ras_ptr;
+        logic [1:0]                     pred_hit;
+        logic [1:0]                     pred_taken;
+        logic [3:0]                     pred_types;
+        logic [$clog2(TAGE_TABLES):0]   provider;
+        logic                           altpred;
+    } ftq_entry_t;
+
+    // BPU update input (from commit)
+    typedef struct packed {
+        logic                           val;
+        logic [CPU_ADDR_BITS-1:0]       pc;
+        logic                           taken;
+        logic [CPU_ADDR_BITS-1:0]       target;
+        logic [1:0]                     btype;
+        logic                           mispred;
+        ftq_entry_t                     ftq_entry;
+    } bpu_update_t;
 
 endpackage

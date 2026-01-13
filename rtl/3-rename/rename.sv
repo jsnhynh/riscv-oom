@@ -131,7 +131,7 @@ module rename (
         r_inst.pc           = d_inst.pc;
         r_inst.rd           = d_inst.rd;
         r_inst.has_rd       = d_inst.has_rd;
-        r_inst.br_taken     = d_inst.br_taken;
+        //r_inst.br_taken     = d_inst.br_taken;
         r_inst.opcode       = d_inst.opcode;
         r_inst.funct7       = d_inst.funct7;
         r_inst.uop_0        = d_inst.uop_0;

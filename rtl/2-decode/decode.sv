@@ -88,12 +88,12 @@ module decode (
             default:    d_inst.has_rd = 1'b0;
         endcase
 
-        casez (d_inst.opcode)
+        /* casez (d_inst.opcode)
             OPC_JAL, OPC_JALR: 
                         d_inst.br_taken = 1'b1;
             default:    d_inst.br_taken = 1'b0;
 
-        endcase
+        endcase */
 
         casez (d_inst.opcode)
             OPC_AUIPC, OPC_JAL, OPC_BRANCH: 
