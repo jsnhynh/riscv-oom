@@ -43,13 +43,14 @@ package uarch_pkg;
         4: MDU 
     */
 
-    /* Branch Prediction Types */
+    /* Branch Prediction */
+    localparam BTB_ENTRIES = 64;
+    localparam RAS_DEPTH   = 16;
     localparam FTQ_DEPTH   = 16;
     localparam GHR_WIDTH   = 32;
-    localparam RAS_DEPTH   = 16;
     localparam TAGE_TABLES = 4;
 
-    // Branch types (for BTB)
+    // Branch types
     localparam BRANCH_COND = 2'b00;
     localparam BRANCH_JUMP = 2'b01;
     localparam BRANCH_CALL = 2'b10;
@@ -143,24 +144,18 @@ package uarch_pkg;
 
     /* BP Stuff */
 
-    // BPU prediction output (to fetch)
-    typedef struct packed {
-        logic [1:0]                     pred_taken;
-        logic [CPU_ADDR_BITS-1:0]       pred_target;
-        logic [1:0]                     pred_hit;
-        logic [1:0]                     pred_types;     // Slot 0 [1:0], Slot 1 [3:2] - flattened
-    } bpu_pred_t;
-
     // BPU metadata (stored in FTQ)
     typedef struct packed {
+        logic                           val;
         logic [CPU_ADDR_BITS-1:0]       pc;
-        logic [GHR_WIDTH-1:0]           ghr;
-        logic [$clog2(RAS_DEPTH)-1:0]   ras_ptr;
-        logic [1:0]                     pred_hit;
-        logic [1:0]                     pred_taken;
-        logic [3:0]                     pred_types;
-        logic [$clog2(TAGE_TABLES):0]   provider;
-        logic                           altpred;
+        
+        logic                           pred_taken;
+        logic [1:0]                     pred_type;
+        logic [CPU_ADDR_BITS-1:0]       pred_targ;
+        logic [$clog2(TAGE_TABLES)-1:0] pred_provider;
+
+        logic [GHR_WIDTH-1:0]           ghr_cp;
+        logic [$clog2(RAS_DEPTH)-1:0]   ras_cp;
     } ftq_entry_t;
 
     // BPU update input (from commit)

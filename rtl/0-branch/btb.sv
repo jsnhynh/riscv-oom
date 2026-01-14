@@ -2,7 +2,7 @@ import riscv_isa_pkg::*;
 import uarch_pkg::*;
 
 module btb #(
-    parameter ENTRIES   = 64,  // Total Entries
+    parameter ENTRIES   = BTB_ENTRIES,
     parameter TAG_WIDTH = 12
 )(
     input  logic clk, rst,
@@ -10,21 +10,19 @@ module btb #(
     // READ (async)
     input  logic [CPU_ADDR_BITS-1:0]    pc,
     output logic [FETCH_WIDTH-1:0]      pred_hit,
-    output logic [CPU_ADDR_BITS-1:0]    pred_targs [FETCH_WIDTH-1:0],
-    output logic [1:0]                  pred_types [FETCH_WIDTH-1:0],
+    output logic [CPU_ADDR_BITS-1:0]    pred_targs    [FETCH_WIDTH-1:0],
+    output logic [1:0]                  pred_types    [FETCH_WIDTH-1:0],
 
     // WRITE (sync)
-    input  logic                        update_val,
-    input  logic [CPU_ADDR_BITS-1:0]    update_pc,
-    input  logic [CPU_ADDR_BITS-1:0]    update_targ,
-    input  logic [1:0]                  update_type,
-    input  logic                        update_taken
+    input  logic [FETCH_WIDTH-1:0]      update_val,
+    input  logic [CPU_ADDR_BITS-1:0]    update_pc     [FETCH_WIDTH-1:0],
+    input  logic [CPU_ADDR_BITS-1:0]    update_targ   [FETCH_WIDTH-1:0],
+    input  logic [1:0]                  update_type   [FETCH_WIDTH-1:0],
+    input  logic                        update_taken  [FETCH_WIDTH-1:0]
 );
 
-    localparam BANK_ENTRIES = ENTRIES / FETCH_WIDTH;    // Entries per Bank
-    localparam IDX_WIDTH    = $clog2(BANK_ENTRIES);
+    localparam IDX_WIDTH = $clog2(ENTRIES);
 
-    // Entry definition
     typedef struct packed {
         logic                       val;
         logic [TAG_WIDTH-1:0]       tag;
@@ -32,66 +30,90 @@ module btb #(
         logic [1:0]                 btype;
     } btb_entry_t;
 
-    // Two banks in one array
-    btb_entry_t banks [FETCH_WIDTH-1:0][BANK_ENTRIES-1:0];
+    btb_entry_t btb [ENTRIES-1:0];
 
     //----------------------------------------------------------
     // Index and Tag Extraction
     //----------------------------------------------------------
     function automatic logic [IDX_WIDTH-1:0] get_index(input logic [CPU_ADDR_BITS-1:0] addr);
-        return addr[IDX_WIDTH+2:3];
+        return addr[IDX_WIDTH+2:2];
     endfunction
 
     function automatic logic [TAG_WIDTH-1:0] get_tag(input logic [CPU_ADDR_BITS-1:0] addr);
-        return addr[TAG_WIDTH+IDX_WIDTH+2:IDX_WIDTH+3];
+        return addr[TAG_WIDTH+IDX_WIDTH+2:IDX_WIDTH+2];
     endfunction
 
     //----------------------------------------------------------
     // Prediction (Async Read)
     //----------------------------------------------------------
-    logic [IDX_WIDTH-1:0] pred_idx;
-    logic [TAG_WIDTH-1:0] pred_tag;
+    logic [IDX_WIDTH-1:0] idx0, idx1;
+    logic [TAG_WIDTH-1:0] tag0, tag1;
 
-    assign pred_idx = get_index(pc);
-    assign pred_tag = get_tag(pc);
+    // Slot 0: PC (fetch address)
+    assign idx0 = get_index(pc);
+    assign tag0 = get_tag(pc);
+
+    // Slot 1: PC + 4 (next sequential instruction)
+    assign idx1 = get_index(pc + 4);
+    assign tag1 = get_tag(pc + 4);
 
     always_comb begin
-        for (int i = 0; i < FETCH_WIDTH; i++) begin
-            pred_hit[i]   = banks[i][pred_idx].val && (banks[i][pred_idx].tag == pred_tag);
-            pred_targs[i] = banks[i][pred_idx].targ;
-            pred_types[i] = banks[i][pred_idx].btype;
-        end
+        // Slot 0
+        pred_hit[0]   = btb[idx0].val && (btb[idx0].tag == tag0);
+        pred_targs[0] = btb[idx0].targ;
+        pred_types[0] = btb[idx0].btype;
+
+        // Slot 1
+        pred_hit[1]   = btb[idx1].val && (btb[idx1].tag == tag1);
+        pred_targs[1] = btb[idx1].targ;
+        pred_types[1] = btb[idx1].btype;
     end
 
     //----------------------------------------------------------
     // Update (Sync Write)
     //----------------------------------------------------------
-    logic [IDX_WIDTH-1:0] update_idx;
-    logic [TAG_WIDTH-1:0] update_tag;
-    logic                 update_bank_sel;
+    logic [IDX_WIDTH-1:0] update_idx  [FETCH_WIDTH-1:0];
+    logic [TAG_WIDTH-1:0] update_tag  [FETCH_WIDTH-1:0];
 
-    assign update_idx      = get_index(update_pc);
-    assign update_tag      = get_tag(update_pc);
-    assign update_bank_sel = update_pc[2];
-
-    //----------------------------------------------------------
-    // Reset Logic - Use generate to avoid nested loops
-    //----------------------------------------------------------
-    genvar bank_idx, entry_idx;
+    always_comb begin
+        for (int i = 0; i < FETCH_WIDTH; i++) begin
+            update_idx[i] = get_index(update_pc[i]);
+            update_tag[i] = get_tag(update_pc[i]);
+        end
+    end
+    
+    genvar i;
     generate
-        for (bank_idx = 0; bank_idx < FETCH_WIDTH; bank_idx++) begin : gen_banks
-            for (entry_idx = 0; entry_idx < BANK_ENTRIES; entry_idx++) begin : gen_entries
-                always_ff @(posedge clk) begin
-                    if (rst) begin
-                        banks[bank_idx][entry_idx].val   <= 1'b0;
-                        banks[bank_idx][entry_idx].tag   <= '0;
-                        banks[bank_idx][entry_idx].targ  <= '0;
-                        banks[bank_idx][entry_idx].btype <= '0;
-                    end else if (update_val && update_taken && (bank_idx == update_bank_sel) && (entry_idx == update_idx)) begin
-                        banks[bank_idx][entry_idx].val   <= 1'b1;
-                        banks[bank_idx][entry_idx].tag   <= update_tag;
-                        banks[bank_idx][entry_idx].targ  <= update_targ;
-                        banks[bank_idx][entry_idx].btype <= update_type;
+        for (i = 0; i < ENTRIES; i++) begin : gen_entries
+            
+            // Determine which slot(s) want to update this entry
+            logic update_from_slot0, update_from_slot1;
+            logic should_update;
+            
+            always_comb begin
+                update_from_slot0 = update_val[0] && update_taken[0] && (i == update_idx[0]);
+                update_from_slot1 = update_val[1] && update_taken[1] && (i == update_idx[1]);
+                should_update = update_from_slot0 || update_from_slot1;
+            end
+            
+            always_ff @(posedge clk) begin
+                if (rst) begin
+                    btb[i].val   <= 1'b0;
+                    btb[i].tag   <= '0;
+                    btb[i].targ  <= '0;
+                    btb[i].btype <= '0;
+                end else if (should_update) begin
+                    // If both slots write to same entry, slot 1 wins (newer instruction)
+                    if (update_from_slot1) begin
+                        btb[i].val   <= 1'b1;
+                        btb[i].tag   <= update_tag[1];
+                        btb[i].targ  <= update_targ[1];
+                        btb[i].btype <= update_type[1];
+                    end else begin
+                        btb[i].val   <= 1'b1;
+                        btb[i].tag   <= update_tag[0];
+                        btb[i].targ  <= update_targ[0];
+                        btb[i].btype <= update_type[0];
                     end
                 end
             end
