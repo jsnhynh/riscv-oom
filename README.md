@@ -3,7 +3,7 @@
 
 This repository contains the SystemVerilog implementation of a dual-issue, 8-stage, out-of-order RISC-V processor. This core was developed as part of an MSEE project in advanced computer architecture at San Jose State University. It implements the RV32IM integer and multiplication/division instruction set extensions and uses a speculative execution engine based on the Tomasulo algorithm with a Reorder Buffer (ROB) for in-order retirement.
 
-**Authors:** Jason, Huynh, Yash Khatavkar, Chandra Nikhita Mala
+**Authors:** Jason, Huynh, Yash Khatavkar
 
 ---
 
@@ -16,9 +16,11 @@ This repository contains the SystemVerilog implementation of a dual-issue, 8-sta
 
 ---
 
-## Block Diagram
+## Block Diagrams
 
 ![Core Block Diagram](./docs/block_diagram.png)
+
+![Pipeline Diagram](./docs/Pipeline.png)
 
 ---
 
