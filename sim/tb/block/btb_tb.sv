@@ -1,6 +1,7 @@
 `timescale 1ns/1ps
 import riscv_isa_pkg::*;
 import uarch_pkg::*;
+import branch_pkg::*;
 
 module btb_tb;
 
@@ -10,11 +11,6 @@ module btb_tb;
     localparam ENTRIES   = 64;
     localparam TAG_WIDTH = 12;
     localparam IDX_WIDTH = $clog2(ENTRIES);
-
-    localparam BRANCH_COND = 2'b00;
-    localparam BRANCH_JUMP = 2'b01;
-    localparam BRANCH_CALL = 2'b10;
-    localparam BRANCH_RET  = 2'b11;
 
     //-------------------------------------------------------------
     // Test Statistics
@@ -30,18 +26,11 @@ module btb_tb;
     always #(CLK_PERIOD/2) clk = ~clk;
 
     //-------------------------------------------------------------
-    // DUT I/O
+    // DUT I/O - Using Structs!
     //-------------------------------------------------------------
-    logic [CPU_ADDR_BITS-1:0]               pc;
-    logic [1:0]                             pred_hit;
-    logic [CPU_ADDR_BITS-1:0]               pred_targs    [1:0];
-    logic [1:0]                             pred_types    [1:0];
-
-    logic [1:0]                             update_val;
-    logic [CPU_ADDR_BITS-1:0]               update_pc     [1:0];
-    logic [CPU_ADDR_BITS-1:0]               update_targ   [1:0];
-    logic [1:0]                             update_type   [1:0];
-    logic                                   update_taken  [1:0];
+    logic [CPU_ADDR_BITS-1:0]   pc;
+    btb_read_port_t             read_ports  [FETCH_WIDTH-1:0];
+    btb_write_port_t            write_ports [FETCH_WIDTH-1:0];
 
     //-------------------------------------------------------------
     // Test Variables
@@ -59,14 +48,8 @@ module btb_tb;
         .clk(clk),
         .rst(rst),
         .pc(pc),
-        .pred_hit(pred_hit),
-        .pred_targs(pred_targs),
-        .pred_types(pred_types),
-        .update_val(update_val),
-        .update_pc(update_pc),
-        .update_targ(update_targ),
-        .update_type(update_type),
-        .update_taken(update_taken)
+        .read_ports(read_ports),
+        .write_ports(write_ports)
     );
 
     //-------------------------------------------------------------
@@ -94,17 +77,14 @@ module btb_tb;
     // Tasks
     //-------------------------------------------------------------
     task automatic clear_signals();
-        pc              = '0;
-        update_val[0]   = 1'b0;
-        update_val[1]   = 1'b0;
-        update_pc[0]    = '0;
-        update_pc[1]    = '0;
-        update_targ[0]  = '0;
-        update_targ[1]  = '0;
-        update_type[0]  = 2'b00;
-        update_type[1]  = 2'b00;
-        update_taken[0] = 1'b0;
-        update_taken[1] = 1'b0;
+        pc = '0;
+        for (int i = 0; i < FETCH_WIDTH; i++) begin
+            write_ports[i].val   = 1'b0;
+            write_ports[i].pc    = '0;
+            write_ports[i].targ  = '0;
+            write_ports[i].btype  = 2'b00;
+            write_ports[i].taken = 1'b0;
+        end
     endtask
 
     task automatic do_update(
@@ -114,13 +94,13 @@ module btb_tb;
         input logic                     utaken
     );
         @(negedge clk);
-        update_val[0]   = 1'b1;
-        update_pc[0]    = upc;
-        update_targ[0]  = utarg;
-        update_type[0]  = utype;
-        update_taken[0] = utaken;
+        write_ports[0].val   = 1'b1;
+        write_ports[0].pc    = upc;
+        write_ports[0].targ  = utarg;
+        write_ports[0].btype  = utype;
+        write_ports[0].taken = utaken;
         @(negedge clk);
-        update_val[0]   = 1'b0;
+        write_ports[0].val = 1'b0;
     endtask
 
     task automatic do_dual_update(
@@ -134,20 +114,20 @@ module btb_tb;
         input logic                     utaken1
     );
         @(negedge clk);
-        update_val[0]   = 1'b1;
-        update_pc[0]    = upc0;
-        update_targ[0]  = utarg0;
-        update_type[0]  = utype0;
-        update_taken[0] = utaken0;
+        write_ports[0].val   = 1'b1;
+        write_ports[0].pc    = upc0;
+        write_ports[0].targ  = utarg0;
+        write_ports[0].btype  = utype0;
+        write_ports[0].taken = utaken0;
         
-        update_val[1]   = 1'b1;
-        update_pc[1]    = upc1;
-        update_targ[1]  = utarg1;
-        update_type[1]  = utype1;
-        update_taken[1] = utaken1;
+        write_ports[1].val   = 1'b1;
+        write_ports[1].pc    = upc1;
+        write_ports[1].targ  = utarg1;
+        write_ports[1].btype  = utype1;
+        write_ports[1].taken = utaken1;
         @(negedge clk);
-        update_val[0]   = 1'b0;
-        update_val[1]   = 1'b0;
+        write_ports[0].val = 1'b0;
+        write_ports[1].val = 1'b0;
     endtask
 
     task automatic check_pred(
@@ -168,19 +148,19 @@ module btb_tb;
         @(negedge clk);
         
         info = $sformatf("hit=[%0d,%0d] targ=[0x%h,0x%h] type=[%s,%s]",
-                         pred_hit[0], pred_hit[1],
-                         pred_targs[0], pred_targs[1],
-                         btype_to_str(pred_types[0]), btype_to_str(pred_types[1]));
+                         read_ports[0].hit, read_ports[1].hit,
+                         read_ports[0].targ, read_ports[1].targ,
+                         btype_to_str(read_ports[0].btype), btype_to_str(read_ports[1].btype));
         
         pass = 1;
         errs = "";
         
-        if (pred_hit[0] !== exp_hit_0) begin pass = 0; errs = $sformatf("%s hit[0]=%0d(exp %0d)", errs, pred_hit[0], exp_hit_0); end
-        if (pred_hit[1] !== exp_hit_1) begin pass = 0; errs = $sformatf("%s hit[1]=%0d(exp %0d)", errs, pred_hit[1], exp_hit_1); end
-        if (exp_hit_0 && pred_targs[0] !== exp_targ_0) begin pass = 0; errs = $sformatf("%s targ[0]=0x%h(exp 0x%h)", errs, pred_targs[0], exp_targ_0); end
-        if (exp_hit_1 && pred_targs[1] !== exp_targ_1) begin pass = 0; errs = $sformatf("%s targ[1]=0x%h(exp 0x%h)", errs, pred_targs[1], exp_targ_1); end
-        if (exp_hit_0 && pred_types[0] !== exp_type_0) begin pass = 0; errs = $sformatf("%s type[0]=%s(exp %s)", errs, btype_to_str(pred_types[0]), btype_to_str(exp_type_0)); end
-        if (exp_hit_1 && pred_types[1] !== exp_type_1) begin pass = 0; errs = $sformatf("%s type[1]=%s(exp %s)", errs, btype_to_str(pred_types[1]), btype_to_str(exp_type_1)); end
+        if (read_ports[0].hit !== exp_hit_0) begin pass = 0; errs = $sformatf("%s hit[0]=%0d(exp %0d)", errs, read_ports[0].hit, exp_hit_0); end
+        if (read_ports[1].hit !== exp_hit_1) begin pass = 0; errs = $sformatf("%s hit[1]=%0d(exp %0d)", errs, read_ports[1].hit, exp_hit_1); end
+        if (exp_hit_0 && read_ports[0].targ !== exp_targ_0) begin pass = 0; errs = $sformatf("%s targ[0]=0x%h(exp 0x%h)", errs, read_ports[0].targ, exp_targ_0); end
+        if (exp_hit_1 && read_ports[1].targ !== exp_targ_1) begin pass = 0; errs = $sformatf("%s targ[1]=0x%h(exp 0x%h)", errs, read_ports[1].targ, exp_targ_1); end
+        if (exp_hit_0 && read_ports[0].btype !== exp_type_0) begin pass = 0; errs = $sformatf("%s type[0]=%s(exp %s)", errs, btype_to_str(read_ports[0].btype), btype_to_str(exp_type_0)); end
+        if (exp_hit_1 && read_ports[1].btype !== exp_type_1) begin pass = 0; errs = $sformatf("%s type[1]=%s(exp %s)", errs, btype_to_str(read_ports[1].btype), btype_to_str(exp_type_1)); end
         
         if (pass) begin
             $display("  [PASS] %-28s : %s", name, info);
@@ -212,23 +192,23 @@ module btb_tb;
         logic [1:0] saved_types [1:0];
         
         @(negedge clk);
-        pc              = read_pc;
-        update_val[0]   = 1'b1;
-        update_pc[0]    = write_pc;
-        update_targ[0]  = write_targ;
-        update_type[0]  = write_type;
-        update_taken[0] = 1'b1;
+        pc = read_pc;
+        write_ports[0].val   = 1'b1;
+        write_ports[0].pc    = write_pc;
+        write_ports[0].targ  = write_targ;
+        write_ports[0].btype  = write_type;
+        write_ports[0].taken = 1'b1;
         
         #1;
-        saved_hit[0] = pred_hit[0];
-        saved_hit[1] = pred_hit[1];
-        saved_targs[0] = pred_targs[0];
-        saved_targs[1] = pred_targs[1];
-        saved_types[0] = pred_types[0];
-        saved_types[1] = pred_types[1];
+        saved_hit[0] = read_ports[0].hit;
+        saved_hit[1] = read_ports[1].hit;
+        saved_targs[0] = read_ports[0].targ;
+        saved_targs[1] = read_ports[1].targ;
+        saved_types[0] = read_ports[0].btype;
+        saved_types[1] = read_ports[1].btype;
         
         @(negedge clk);
-        update_val[0] = 1'b0;
+        write_ports[0].val = 1'b0;
         
         info = $sformatf("hit=[%0d,%0d] targ=[0x%h,0x%h] type=[%s,%s]",
                          saved_hit[0], saved_hit[1],
@@ -270,7 +250,7 @@ module btb_tb;
         $dumpvars(0, btb_tb);
 
         $display("========================================");
-        $display("  BTB Testbench");
+        $display("  BTB Testbench (Struct Interface)");
         $display("  ENTRIES=%0d, TAG_WIDTH=%0d", ENTRIES, TAG_WIDTH);
         $display("========================================\n");
 

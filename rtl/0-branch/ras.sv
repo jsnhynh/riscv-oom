@@ -1,8 +1,9 @@
 import riscv_isa_pkg::*;
 import uarch_pkg::*;
+import branch_pkg::*;
 
 module ras #(
-    parameter DEPTH = 16
+    parameter DEPTH = RAS_ENTRIES
 )(
     input  logic clk, rst,
 
