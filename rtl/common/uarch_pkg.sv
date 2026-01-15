@@ -20,6 +20,7 @@ package uarch_pkg;
     localparam PIPE_WIDTH       = 2;        // Number of instructions processed
 
     localparam ROB_ENTRIES      = 32;
+    localparam FTQ_ENTRIES      = 16;
     localparam ALU_RS_ENTRIES   = 8;
     localparam MDU_RS_ENTRIES   = 4;
     localparam LSQ_ENTRIES      = 8;
@@ -42,19 +43,6 @@ package uarch_pkg;
         3: AGU
         4: MDU 
     */
-
-    /* Branch Prediction */
-    localparam BTB_ENTRIES = 64;
-    localparam RAS_DEPTH   = 16;
-    localparam FTQ_DEPTH   = 16;
-    localparam GHR_WIDTH   = 32;
-    localparam TAGE_TABLES = 4;
-
-    // Branch types
-    localparam BRANCH_COND = 2'b00;
-    localparam BRANCH_JUMP = 2'b01;
-    localparam BRANCH_CALL = 2'b10;
-    localparam BRANCH_RET  = 2'b11;
 
     /*
         The following structs is used to pass decoded instructions down the pipeline to the FU
@@ -123,7 +111,7 @@ package uarch_pkg;
 
         // FTQ
         logic has_ftq;
-        logic [$clog2(FTQ_DEPTH)-1:0] ftq_idx;
+        logic [$clog2(FTQ_ENTRIES)-1:0] ftq_idx;
     } rob_entry_t;
 
     //-------------------------------------------------------------
@@ -141,32 +129,5 @@ package uarch_pkg;
         logic [TAG_WIDTH-1:0]           tag;
         logic                           we;
     } prf_commit_write_port_t;
-
-    /* BP Stuff */
-
-    // BPU metadata (stored in FTQ)
-    typedef struct packed {
-        logic                           val;
-        logic [CPU_ADDR_BITS-1:0]       pc;
-        
-        logic                           pred_taken;
-        logic [1:0]                     pred_type;
-        logic [CPU_ADDR_BITS-1:0]       pred_targ;
-        logic [$clog2(TAGE_TABLES)-1:0] pred_provider;
-
-        logic [GHR_WIDTH-1:0]           ghr_cp;
-        logic [$clog2(RAS_DEPTH)-1:0]   ras_cp;
-    } ftq_entry_t;
-
-    // BPU update input (from commit)
-    typedef struct packed {
-        logic                           val;
-        logic [CPU_ADDR_BITS-1:0]       pc;
-        logic                           taken;
-        logic [CPU_ADDR_BITS-1:0]       target;
-        logic [1:0]                     btype;
-        logic                           mispred;
-        ftq_entry_t                     ftq_entry;
-    } bpu_update_t;
 
 endpackage

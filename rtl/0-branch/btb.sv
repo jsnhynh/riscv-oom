@@ -1,24 +1,19 @@
 import riscv_isa_pkg::*;
 import uarch_pkg::*;
+import branch_pkg::*;
 
 module btb #(
     parameter ENTRIES   = BTB_ENTRIES,
-    parameter TAG_WIDTH = 12
+    parameter TAG_WIDTH = BTB_TAG_WIDTH
 )(
     input  logic clk, rst,
 
     // READ (async)
     input  logic [CPU_ADDR_BITS-1:0]    pc,
-    output logic [FETCH_WIDTH-1:0]      pred_hit,
-    output logic [CPU_ADDR_BITS-1:0]    pred_targs    [FETCH_WIDTH-1:0],
-    output logic [1:0]                  pred_types    [FETCH_WIDTH-1:0],
+    output btb_read_port_t              read_ports  [FETCH_WIDTH-1:0],
 
     // WRITE (sync)
-    input  logic [FETCH_WIDTH-1:0]      update_val,
-    input  logic [CPU_ADDR_BITS-1:0]    update_pc     [FETCH_WIDTH-1:0],
-    input  logic [CPU_ADDR_BITS-1:0]    update_targ   [FETCH_WIDTH-1:0],
-    input  logic [1:0]                  update_type   [FETCH_WIDTH-1:0],
-    input  logic                        update_taken  [FETCH_WIDTH-1:0]
+    input  btb_write_port_t             write_ports [FETCH_WIDTH-1:0]
 );
 
     localparam IDX_WIDTH = $clog2(ENTRIES);
@@ -44,41 +39,37 @@ module btb #(
     endfunction
 
     //----------------------------------------------------------
-    // Prediction (Async Read)
+    // Prediction (Async Read) - Dual Port
     //----------------------------------------------------------
-    logic [IDX_WIDTH-1:0] idx0, idx1;
-    logic [TAG_WIDTH-1:0] tag0, tag1;
+    logic [IDX_WIDTH-1:0] idx [FETCH_WIDTH-1:0];
+    logic [TAG_WIDTH-1:0] tag [FETCH_WIDTH-1:0];
 
     // Slot 0: PC (fetch address)
-    assign idx0 = get_index(pc);
-    assign tag0 = get_tag(pc);
+    assign idx[0] = get_index(pc);
+    assign tag[0] = get_tag(pc);
 
     // Slot 1: PC + 4 (next sequential instruction)
-    assign idx1 = get_index(pc + 4);
-    assign tag1 = get_tag(pc + 4);
+    assign idx[1] = get_index(pc + 4);
+    assign tag[1] = get_tag(pc + 4);
 
     always_comb begin
-        // Slot 0
-        pred_hit[0]   = btb[idx0].val && (btb[idx0].tag == tag0);
-        pred_targs[0] = btb[idx0].targ;
-        pred_types[0] = btb[idx0].btype;
-
-        // Slot 1
-        pred_hit[1]   = btb[idx1].val && (btb[idx1].tag == tag1);
-        pred_targs[1] = btb[idx1].targ;
-        pred_types[1] = btb[idx1].btype;
+        for (int p = 0; p < FETCH_WIDTH; p++) begin
+            read_ports[p].hit  = btb[idx[p]].val && (btb[idx[p]].tag == tag[p]);
+            read_ports[p].targ = btb[idx[p]].targ;
+            read_ports[p].btype = btb[idx[p]].btype;
+        end
     end
 
     //----------------------------------------------------------
-    // Update (Sync Write)
+    // Update (Sync Write) - Dual Port
     //----------------------------------------------------------
-    logic [IDX_WIDTH-1:0] update_idx  [FETCH_WIDTH-1:0];
-    logic [TAG_WIDTH-1:0] update_tag  [FETCH_WIDTH-1:0];
+    logic [IDX_WIDTH-1:0] update_idx [FETCH_WIDTH-1:0];
+    logic [TAG_WIDTH-1:0] update_tag [FETCH_WIDTH-1:0];
 
     always_comb begin
         for (int i = 0; i < FETCH_WIDTH; i++) begin
-            update_idx[i] = get_index(update_pc[i]);
-            update_tag[i] = get_tag(update_pc[i]);
+            update_idx[i] = get_index(write_ports[i].pc);
+            update_tag[i] = get_tag(write_ports[i].pc);
         end
     end
     
@@ -91,8 +82,8 @@ module btb #(
             logic should_update;
             
             always_comb begin
-                update_from_slot0 = update_val[0] && update_taken[0] && (i == update_idx[0]);
-                update_from_slot1 = update_val[1] && update_taken[1] && (i == update_idx[1]);
+                update_from_slot0 = write_ports[0].val && write_ports[0].taken && (i == update_idx[0]);
+                update_from_slot1 = write_ports[1].val && write_ports[1].taken && (i == update_idx[1]);
                 should_update = update_from_slot0 || update_from_slot1;
             end
             
@@ -107,13 +98,13 @@ module btb #(
                     if (update_from_slot1) begin
                         btb[i].val   <= 1'b1;
                         btb[i].tag   <= update_tag[1];
-                        btb[i].targ  <= update_targ[1];
-                        btb[i].btype <= update_type[1];
+                        btb[i].targ  <= write_ports[1].targ;
+                        btb[i].btype <= write_ports[1].btype;
                     end else begin
                         btb[i].val   <= 1'b1;
                         btb[i].tag   <= update_tag[0];
-                        btb[i].targ  <= update_targ[0];
-                        btb[i].btype <= update_type[0];
+                        btb[i].targ  <= write_ports[0].targ;
+                        btb[i].btype <= write_ports[0].btype;
                     end
                 end
             end
